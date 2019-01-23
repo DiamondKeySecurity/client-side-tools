@@ -1,0 +1,158 @@
+#!/usr/bin/env python
+# Copyright (c) 2018, 2019 Diamond Key Security, NFP  All rights reserved.
+#
+
+import os
+import errno
+import argparse
+import logging
+import socket
+import sys
+from time import sleep
+
+from zeroconf import ServiceBrowser, ServiceStateChange, Zeroconf
+
+class HSM:
+    """Information about an HSM from Zero Conf"""
+    def __init__(self, name, service_type, info):
+        self.name = name
+        self.service_type = service_type
+        self.address = socket.inet_ntoa(info.address)
+        self.port = info.port
+        self.server = info.server
+        self.weight = info.weight
+        self.priority = info.priority
+        self.properties = {}
+        if (info.properties):
+            for key, value in info.properties.items():
+                self.properties[key] = value
+
+        # this is the preferred way because of a bug in zeroconf which gives the wrong IP address
+        if 'IP' in self.properties:
+            self.address = self.properties['IP']
+
+hsm_cty_list = []
+
+RPC_IP_PORT = 8080
+CTY_IP_PORT = 8081
+
+def on_service_state_change(zeroconf, service_type, name, state_change):
+    global hsm_cty_list
+    if state_change is ServiceStateChange.Added:
+        info = zeroconf.get_service_info(service_type, name)
+        if info:
+            try:
+                hsm = HSM(name, service_type, info)
+                if(service_type == "_dks-hsm-cty._tcp.local."):
+                    hsm_cty_list.append(hsm)
+            except:
+                pass
+
+def get_hsm_xml_string(hsm, tag, port):
+    if(hsm is None):
+        return "\r\n"
+    else:
+        return '\r\n  <%s>\r\n    <IP>%s</IP>\r\n    <port>%d</port>\r\n    <servername>%s</servername>\r\n    <serial>%s</serial>\r\n  </%s>'%(tag, hsm.address, port, hsm.properties['host'], hsm.properties['serial'], tag)
+
+def save_config(cty_hsm, path):
+    try:
+        try:
+            os.makedirs(path)
+        except OSError as e:
+            if e.errno != errno.EEXIST:
+                raise
+
+        file_name = path + "/hsm.conf"
+        os.umask(0)
+
+        print ("\r\n\r\nWriting to %s."%file_name)
+        with os.fdopen(os.open(file_name, os.O_CREAT | os.O_WRONLY, 0o755),'w') as fd:  
+            fd.write('<?xml version="1.0" encoding="utf-8" ?>\r\n<diamondhsm>%s%s\r\n</diamondhsm>'%(get_hsm_xml_string(cty_hsm, "cty", CTY_IP_PORT), get_hsm_xml_string(cty_hsm, "rpc", RPC_IP_PORT)))
+            fd.truncate()
+
+    except OSError:
+        print ("\r\n\r\nThere was an error creating the file. Please check your file permissions or run using 'sudo ./findHSM'")
+
+def get_hsm_index(hsm_list, list_name):
+    print ("\r\n--Located %s Diamond HSM ports\r\n"%(list_name))
+
+    index = 0
+    for hsm in hsm_list:
+        print("\r\n%d): %s"% (index, hsm.name))
+        print("      Address: %s:%d" % (hsm.address, hsm.port))
+        print("      Weight: %d, priority: %d" % (hsm.weight, hsm.priority))
+        print("      Server: %s" % (hsm.server,))
+        if hsm.properties:
+            print("      Properties are:")
+            for key, value in hsm.properties.items():
+                print("        %s: %s" % (key, value))
+        else:
+            print("  No properties")
+        index += 1
+
+    max_index = index - 1
+    while True:
+        choice = raw_input("\r\nPlease choose the HSM you would like to connect to or Q to quit: ")
+        if(choice == 'q' or choice == 'Q'):
+            return -1
+        else:
+            index = 0
+            try:
+                index = int(choice)
+                if (index > max_index):
+                    raise ValueError('Index out of range')
+                else:
+                    print("%s selected"%index)
+                    return index
+            except ValueError:
+                print("%s is not a valid index."%choice)
+                continue
+
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(formatter_class = argparse.ArgumentDefaultsHelpFormatter)
+
+    parser.add_argument("--config_path",
+                        help    = "Diamond Key HSM configuration path",
+                        default = os.getenv("DIAMOND_HSM_CONFIG_PATH", "/etc/dkey/hsm"))
+
+    args = parser.parse_args()
+
+    zeroconf = Zeroconf()
+    browser_cty = ServiceBrowser(zeroconf, "_dks-hsm-cty._tcp.local.", handlers=[on_service_state_change])
+
+    try:
+        sys.stdout.write('Searching for Diamond HSMs ')
+        sys.stdout.flush()
+
+        for n in range(20):
+            sys.stdout.write('.')
+            sys.stdout.flush()
+            sleep(1)
+
+        cty_index = -1
+        if (len(hsm_cty_list) > 0):
+            print("\r\n\r\nFound Diamond HSMs")
+
+            if(len(hsm_cty_list) > 0):
+                cty_index = get_hsm_index(hsm_cty_list, "CTY")
+                if (cty_index < 0):
+                    raise KeyboardInterrupt
+
+            cty_hsm = None
+
+            # get the values that we need to store
+            if (cty_index >= 0):
+                cty_hsm = hsm_cty_list[cty_index]
+
+            save_config(cty_hsm, args.config_path)
+        else:
+            print("No Diamond HSMs were found.")
+
+    except (KeyboardInterrupt):
+        pass
+    finally:
+        zeroconf.close()
+
+
