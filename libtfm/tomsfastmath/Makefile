@@ -1,5 +1,5 @@
 ifndef CRYPTECH_ROOT
-  CRYPTECH_ROOT := $(abspath ../../../../../CrypTech)
+  CRYPTECH_ROOT := $(abspath ../../../../CrypTech)
 endif
 
 vpath %.c ${CRYPTECH_ROOT}/sw/thirdparty/libtfm/tomsfastmath

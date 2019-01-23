@@ -14,13 +14,13 @@ LIBRESSL_LIB_DIR    := ${LIBRESSL_BLD}/lib
 LIBRESSL_LIBS       := ${LIBRESSL_LIB_DIR}/libtls.a ${LIBRESSL_LIB_DIR}/libssl.a ${LIBRESSL_LIB_DIR}/libcrypto.a
 
 LIBDKS_SRC := ${DKS_ROOT}/sw/libdks
-LIBDKS_BUILD := ${DKS_ROOT}/sw/HSM/client_tools/libdks
+LIBDKS_BUILD := ${DKS_ROOT}/sw/client-side-tools/libdks
 
 LIBHAL_SRC	?= ${CRYPTECH_ROOT}/sw/libhal
-LIBHAL_BLD	?= ${DKS_ROOT}/sw/HSM/client_tools/libhal
+LIBHAL_BLD	?= ${DKS_ROOT}/sw/client-side-tools/libhal
 
 LIBTFM_SRC	?= ${CRYPTECH_ROOT}/sw/thirdparty/libtfm
-LIBTFM_BLD	?= ${DKS_ROOT}/sw/HSM/client_tools/libtfm
+LIBTFM_BLD	?= ${DKS_ROOT}/sw/client-side-tools/libtfm
 
 LIBS	:= ${LIBHAL_BLD}/libhal.a ${LIBDKS_BUILD}/libdks.a ${LIBTFM_BLD}/libtfm.a
 
