@@ -2,3 +2,4 @@
 *.o
 test-*
 dks_keygen
+dks_setup_console
