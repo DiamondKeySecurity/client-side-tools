@@ -3,7 +3,7 @@
 # would like, but it does the job.  Prettier makefiles can wait for another day.
 
 ifndef CRYPTECH_ROOT
-  CRYPTECH_ROOT := $(abspath ../../../CrypTech)
+  CRYPTECH_ROOT := $(abspath ../../../../CrypTech)
 endif
 
 REPO := ${CRYPTECH_ROOT}/sw/thirdparty/libtfm

@@ -1,4 +1,4 @@
-DKS_ROOT ?= $(abspath ../../..)
+DKS_ROOT ?= $(abspath ../../../..)
 
 ifndef CRYPTECH_ROOT
   CRYPTECH_ROOT := ${DKS_ROOT}/CrypTech

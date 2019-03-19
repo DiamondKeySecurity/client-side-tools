@@ -41,13 +41,13 @@ dks_keygen.o : dks_keygen.c
 	gcc -I${LIBERSSL_INCLUDE} -I${LIBDKS_SRC} -I${LIBHAL_SRC} -O -c dks_keygen.c
 
 ${LIBDKS_BUILD}/libdks.a: .FORCE
-	${MAKE} -C libdks
+	${MAKE} -C ${LIBDKS_BUILD}
 
 ${LIBHAL_BLD}/libhal.a: .FORCE ${LIBTFM_BLD}/libtfm.a
-	${MAKE} -C libhal ${LIBHAL_TARGET}
+	${MAKE} -C ${LIBHAL_BLD} ${LIBHAL_TARGET}
 
 ${LIBTFM_BLD}/libtfm.a: .FORCE
-	${MAKE} -C libtfm
+	${MAKE} -C ${LIBTFM_BLD}
 
 clean:
 	rm -rf *.o
