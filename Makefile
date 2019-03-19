@@ -26,7 +26,7 @@ LIBTFM_BLD	?= ${LIBS_DIR}/libtfm
 
 LIBS	:= ${LIBHAL_BLD}/libhal.a ${LIBDKS_BUILD}/libdks.a ${LIBTFM_BLD}/libtfm.a
 
-all : dks_setup_console dks_keygen
+all : bin/dks_setup_console bin/dks_keygen
 
 bin/dks_setup_console : dks_setup_console.o ${LIBS}
 	gcc dks_setup_console.o ${LIBS} ${LIBRESSL_LIBS} -lpthread  -o bin/dks_setup_console
