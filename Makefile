@@ -13,27 +13,29 @@ LIBERSSL_INCLUDE    := ${LIBRESSL_BLD}/include
 LIBRESSL_LIB_DIR    := ${LIBRESSL_BLD}/lib
 LIBRESSL_LIBS       := ${LIBRESSL_LIB_DIR}/libtls.a ${LIBRESSL_LIB_DIR}/libssl.a ${LIBRESSL_LIB_DIR}/libcrypto.a
 
+LIBS_DIR := ${DKS_ROOT}/sw/client-side-tools/libs
+
 LIBDKS_SRC := ${DKS_ROOT}/sw/libdks
-LIBDKS_BUILD := ${DKS_ROOT}/sw/client-side-tools/libdks
+LIBDKS_BUILD := ${LIBS_DIR}/libdks
 
 LIBHAL_SRC	?= ${CRYPTECH_ROOT}/sw/libhal
-LIBHAL_BLD	?= ${DKS_ROOT}/sw/client-side-tools/libhal
+LIBHAL_BLD	?= ${LIBS_DIR}/libhal
 
 LIBTFM_SRC	?= ${CRYPTECH_ROOT}/sw/thirdparty/libtfm
-LIBTFM_BLD	?= ${DKS_ROOT}/sw/client-side-tools/libtfm
+LIBTFM_BLD	?= ${LIBS_DIR}/libtfm
 
 LIBS	:= ${LIBHAL_BLD}/libhal.a ${LIBDKS_BUILD}/libdks.a ${LIBTFM_BLD}/libtfm.a
 
 all : dks_setup_console dks_keygen
 
-dks_setup_console : dks_setup_console.o ${LIBS}
-	gcc dks_setup_console.o ${LIBS} ${LIBRESSL_LIBS} -lpthread  -o dks_setup_console
+bin/dks_setup_console : dks_setup_console.o ${LIBS}
+	gcc dks_setup_console.o ${LIBS} ${LIBRESSL_LIBS} -lpthread  -o bin/dks_setup_console
 
 dks_setup_console.o : dks_setup_console.c
 	gcc -I${LIBERSSL_INCLUDE} -I${LIBDKS_SRC} -O -c dks_setup_console.c
 
-dks_keygen : dks_keygen.o ${LIBS}
-	gcc dks_keygen.o ${LIBS} ${LIBRESSL_LIBS} -lpthread  -o dks_keygen
+bin/dks_keygen : dks_keygen.o ${LIBS}
+	gcc dks_keygen.o ${LIBS} ${LIBRESSL_LIBS} -lpthread  -o bin/dks_keygen
 
 dks_keygen.o : dks_keygen.c
 	gcc -I${LIBERSSL_INCLUDE} -I${LIBDKS_SRC} -I${LIBHAL_SRC} -O -c dks_keygen.c
@@ -49,7 +51,8 @@ ${LIBTFM_BLD}/libtfm.a: .FORCE
 
 clean:
 	rm -rf *.o
-	rm -rf dks_setup_console
+	rm bin/dks_setup_console
+	rm bin/dks_keygen
 	${MAKE} -C libdks  $@
 
 .FORCE:
