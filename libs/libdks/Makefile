@@ -1,6 +1,6 @@
 # Copyright (c) 2018, 2019 Diamond Key Security, NFP  All rights reserved.
 #
-DKS_ROOT ?= $(abspath ../../..)
+DKS_ROOT ?= $(abspath ../../../..)
 
 
 LIBDKS_SRC ?= ${DKS_ROOT}/sw/libdks
