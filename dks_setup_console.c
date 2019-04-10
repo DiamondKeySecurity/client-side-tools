@@ -14,6 +14,7 @@
 #include <tls.h>
 
 #include <dks.h>
+#include <dks_transfer.h>
 
 pthread_mutex_t active_lock;
 pthread_mutex_t write_lock;
@@ -100,8 +101,28 @@ error_condition:
     return NULL;
 }
 
+void SendHSMUpdate(ThreadArguments *args, char *command)
+{
+    // skip command code and ':RECV:'
+    char *file_to_send = &command[10];
+
+    // send the file
+    dks_send_file(args->tls, file_to_send);
+}
+
+void SendSetupJSON(ThreadArguments *args, char *command)
+{
+    // skip command code and ':RECV:'
+    char *file_to_send = &command[10];
+}
+
 void handle_special_command(ThreadArguments *args, char *command)
 {
+    // make sure nothing else gets sent during our transfer
+    pthread_mutex_lock(&write_lock);
+    args->can_write = false;
+    pthread_mutex_unlock(&write_lock);
+
     // get the code
     int code = (command[0] << 24) + 
                (command[1] << 16) + 
@@ -110,69 +131,17 @@ void handle_special_command(ThreadArguments *args, char *command)
 
     if (code == MGMTCODE_RECEIVEHSM_UPDATE)
     {
-        char buffer[1024];
-
-        // make sure nothing else gets sent during our transfer
-        pthread_mutex_lock(&write_lock);
-        args->can_write = false;
-        pthread_mutex_unlock(&write_lock);
-
-        // skip command code and ':RECV:'
-        char *file_to_send = &command[10];
-
-        FILE *fp = fopen(file_to_send, "rb");
-
-        if(fp != NULL)
-        {
-            printf("\r\nSending file %s to HSM\r\n", file_to_send);
-
-            // get the size of the file
-            fseek(fp, 0, SEEK_END);
-            long file_len = ftell(fp);
-            fseek(fp, 0, SEEK_SET);
-
-            // send the file size
-            sprintf(buffer, "%ld\r", file_len);
-
-            tls_write(args->tls, buffer, strlen(buffer));
-
-            int remaining = file_len;
-
-            // send the file
-            int read_count;
-            do
-            {
-                read_count = 1024;
-                if(read_count > remaining) read_count = remaining;
-
-                int n = fread(buffer, read_count, 1, fp);
-
-                if(n > 0)
-                {
-                    // send to the HSM
-                    tls_write(args->tls, buffer, read_count);
-                }
-
-                remaining -= read_count;
-
-            } while (remaining > 0);
-
-            fclose(fp);
-        }
-        else
-        {
-            printf("\r\nUnable to open (%s).\r\n", file_to_send);
-
-            // send 0 which means the file wasn't found
-            sprintf(buffer, "0\r0000000");
-
-            tls_write(args->tls, buffer, strlen(buffer));            
-        }
-
-        pthread_mutex_lock(&write_lock);
-        args->can_write = true;
-        pthread_mutex_unlock(&write_lock);        
+        SendHSMUpdate(args, command);
     }
+    else if (code == MGMTCODE_RECIEVE_RMT_KEKEK)
+    {
+        SendSetupJSON(args, command);
+    }
+
+    // allow other things during transfer
+    pthread_mutex_lock(&write_lock);
+    args->can_write = true;
+    pthread_mutex_unlock(&write_lock);    
 
     free(command);
 }
