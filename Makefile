@@ -2,7 +2,7 @@
 #
 DKS_ROOT := $(abspath ../..)
 
-LIBHAL_TARGET := tcpdaemon
+LIBHAL_TARGET := serial
 
 ifndef CRYPTECH_ROOT
   CRYPTECH_ROOT := ${DKS_ROOT}/CrypTech
@@ -26,19 +26,16 @@ LIBTFM_BLD	?= ${LIBS_DIR}/libtfm
 
 LIBS	:= ${LIBHAL_BLD}/libhal.a ${LIBDKS_BUILD}/libdks.a ${LIBTFM_BLD}/libtfm.a
 
-all : bin/dks_setup_console bin/dks_keygen
+all : bin/dks_setup_console
 
-bin/dks_setup_console : dks_setup_console.o ${LIBS}
+bin/dks_setup_console : dks_setup_console.o cryptech_device.o ${LIBS}
 	gcc dks_setup_console.o ${LIBS} ${LIBRESSL_LIBS} -lpthread  -o bin/dks_setup_console
 
 dks_setup_console.o : dks_setup_console.c
 	gcc -I${LIBERSSL_INCLUDE} -I${LIBDKS_SRC} -O -c dks_setup_console.c
 
-bin/dks_keygen : dks_keygen.o ${LIBS}
-	gcc dks_keygen.o ${LIBS} ${LIBRESSL_LIBS} -lpthread  -o bin/dks_keygen
-
-dks_keygen.o : dks_keygen.c
-	gcc -I${LIBERSSL_INCLUDE} -I${LIBDKS_SRC} -I${LIBHAL_SRC} -O -c dks_keygen.c
+cryptech_device.o : cryptech_device.c cryptech_device.h
+	gcc -I${LIBHAL_SRC} -O -c cryptech_device.c
 
 ${LIBDKS_BUILD}/libdks.a: .FORCE
 	${MAKE} -C ${LIBDKS_BUILD}
@@ -52,7 +49,6 @@ ${LIBTFM_BLD}/libtfm.a: .FORCE
 clean:
 	rm -rf *.o
 	rm bin/dks_setup_console
-	rm bin/dks_keygen
 	${MAKE} -C libdks  $@
 
 .FORCE:
