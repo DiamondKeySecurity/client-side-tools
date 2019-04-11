@@ -49,6 +49,8 @@ ${LIBTFM_BLD}/libtfm.a: .FORCE
 clean:
 	rm -rf *.o
 	rm bin/dks_setup_console
-	${MAKE} -C libdks  $@
+	${MAKE} -C libs/libdks  $@
+	${MAKE} -C libs/libhal  $@
+	${MAKE} -C libs/libtfm  $@
 
 .FORCE:
