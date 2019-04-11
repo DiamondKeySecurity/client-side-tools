@@ -112,8 +112,9 @@ void SendHSMUpdate(ThreadArguments *args, char *command)
 
 void SendSetupJSON(ThreadArguments *args, char *command)
 {
-    // skip command code and ':RECV:'
-    char *file_to_send = &command[10];
+    char *setup_json = "[]\n";
+
+    dks_send_file_mem(args->tls, setup_json, strlen(setup_json));
 }
 
 void handle_special_command(ThreadArguments *args, char *command)
