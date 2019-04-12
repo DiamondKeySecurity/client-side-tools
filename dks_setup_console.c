@@ -16,6 +16,8 @@
 #include <dks.h>
 #include <dks_transfer.h>
 
+#include "cryptech_device.h"
+
 pthread_mutex_t active_lock;
 pthread_mutex_t write_lock;
 
@@ -112,9 +114,52 @@ void SendHSMUpdate(ThreadArguments *args, char *command)
 
 void SendSetupJSON(ThreadArguments *args, char *command)
 {
-    char *setup_json = "[]\n";
+    // get pin and masterkey from options
+    // skip command code and ':RECV:{'
+    char *masterkey = &command[11];
+    char *pin;
 
-    dks_send_file_mem(args->tls, setup_json, strlen(setup_json));
+    char *ptr = masterkey;
+
+    // find the end of the master key option
+    while (*ptr != '}') ptr++;
+    *ptr = 0;
+
+    // get the beginning of the pin
+    pin = ptr + 2;
+
+    // find the end of the pin option
+    while (*ptr != '}') ptr++;
+    *ptr = 0;
+
+    uint32_t handle = get_random_handle();
+
+    int rval = init_cryptech_device(pin, handle);
+
+    if (rval != 0)
+    {
+        printf("unable to log into CrypTech device");
+        dks_send_file_none(args->tls);
+    }
+    else
+    {
+        rval = setup_backup_destination(handle);
+
+        if (rval == 0)
+        {
+            char *setup_json = "[]\n";
+
+            dks_send_file_mem(args->tls, setup_json, strlen(setup_json));
+        }
+        else
+        {
+            printf("Unable to get KEKEK\r\n");
+            dks_send_file_none(args->tls);
+        }
+        
+    }
+
+    close_cryptech_device(handle);
 }
 
 void handle_special_command(ThreadArguments *args, char *command)
