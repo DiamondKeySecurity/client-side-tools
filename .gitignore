@@ -1,5 +1,6 @@
 *.a
 *.o
+*.pyc
 test-*
 dks_keygen
 dks_setup_console
