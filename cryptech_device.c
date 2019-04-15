@@ -11,7 +11,7 @@
     do {                                                        \
         hal_error_t err = (op);                                 \
         if (err) {                                              \
-            printf("%s: %s\n", #op, hal_error_string(err));     \
+            printf("%s: %s\r\n", #op, hal_error_string(err));     \
             return err;                                         \
         }                                                       \
     } while (0)
@@ -85,7 +85,8 @@ int setup_backup_destination(uint32_t handle)
     hal_uuid_t previous_uuid;
     memset(&previous_uuid, 0, sizeof(previous_uuid));
 
-    unsigned n, state;
+    unsigned n, state = 0;
+
 
     // First try to find an exisiting KEKEK on the device
     check(hal_rpc_pkey_match(client,
