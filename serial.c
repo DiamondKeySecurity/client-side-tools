@@ -11,10 +11,18 @@
 #define hal_serial_init serial_init
 #define hal_serial_close serial_close
 #define hal_serial_send_char serial_send_char
-#define hal_serial_recv_char serial_recv_char
+#define hal_serial_recv_char _serial_recv_char_
 #define hal_serial_get_fd serial_get_fd
 
 #include <rpc_serial.c>
+
+hal_error_t serial_recv_char(uint8_t * const c)
+{
+    // we allow timing out
+    if (read(fd, c, 1) != 1)
+	    return HAL_ERROR_IO_TIMEOUT;
+    return HAL_OK;
+}
 
 #undef fd
 #undef hal_serial_init

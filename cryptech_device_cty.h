@@ -10,8 +10,10 @@
 #define CTY_CLIENT_SERIAL_SPEED_ENVVAR          "CRYPTECH_CTY_CLIENT_SERIAL_SPEED"
 
 
-int open_cryptech_device_cty(char *pin);
-int close_cryptech_device();
-
+int open_cryptech_device_cty();
+int close_cryptech_device_cty();
+int cty_write(char *cmd);
+int cty_read(char **result, const char *prompt);
+int cty_login(char *pin);
 
 #endif

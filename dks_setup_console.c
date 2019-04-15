@@ -17,6 +17,7 @@
 #include <dks_transfer.h>
 
 #include "cryptech_device.h"
+#include "cryptech_device_cty.h"
 
 pthread_mutex_t active_lock;
 pthread_mutex_t write_lock;
@@ -328,6 +329,18 @@ int ReadKey(char *buffer, int max_len)
 
 int main(int argc, char **argv)
 {
+    int r =open_cryptech_device_cty();
+    if(r != 0) { printf("AERROR:%i\r\n", r); return 0; }
+
+    char *result = NULL;
+    r = cty_login("1234");
+    if(r != 0) { printf("BERROR:%i\r\n", r); return 0; }
+
+    r = close_cryptech_device_cty();
+    if(r != 0) { printf("CERROR:%i\r\n", r); return 0; }
+    
+
+    return 0;
     struct tls *tls = NULL;
     struct tls_config *config = NULL;
     char *initial_msg = "\r";
