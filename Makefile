@@ -28,14 +28,20 @@ LIBS	:= ${LIBHAL_BLD}/libhal.a ${LIBDKS_BUILD}/libdks.a ${LIBTFM_BLD}/libtfm.a
 
 all : bin/dks_setup_console
 
-bin/dks_setup_console : dks_setup_console.o cryptech_device.o ${LIBS}
-	gcc dks_setup_console.o cryptech_device.o ${LIBS} ${LIBRESSL_LIBS} -lpthread  -o bin/dks_setup_console
+bin/dks_setup_console : dks_setup_console.o cryptech_device.o serial.o cryptech_device_cty.o ${LIBS}
+	gcc dks_setup_console.o cryptech_device.o serial.o cryptech_device_cty.o ${LIBS} ${LIBRESSL_LIBS} -lpthread  -o bin/dks_setup_console
 
 dks_setup_console.o : dks_setup_console.c
 	gcc -I${LIBERSSL_INCLUDE} -I${LIBDKS_SRC} -O -c dks_setup_console.c
 
 cryptech_device.o : cryptech_device.c cryptech_device.h
 	gcc -I${LIBHAL_SRC} -O -c cryptech_device.c
+
+cryptech_device_cty.o : cryptech_device_cty.c cryptech_device_cty.h
+	gcc -I${LIBHAL_SRC} -O -c cryptech_device_cty.c
+
+serial.o : serial.c serial.h
+	gcc -I${LIBHAL_SRC} -O -c serial.c
 
 ${LIBDKS_BUILD}/libdks.a: .FORCE
 	${MAKE} -C ${LIBDKS_BUILD}
