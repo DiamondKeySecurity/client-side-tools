@@ -186,7 +186,7 @@ void SendSetupJSON(ThreadArguments *args, char *command)
         }
         else
         {
-            printf("Unable to get KEKEK\r\n");
+            printf("Unable to get KEKEK.\r\nPlease check that the master key is correct.\r\n");
             dks_send_file_none(args->tls);
         }
         

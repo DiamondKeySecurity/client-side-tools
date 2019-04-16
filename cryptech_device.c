@@ -115,8 +115,8 @@ int setup_backup_destination(uint32_t handle)
                                 &kekek,
                                 &uuids[i]));
 
-        hal_rpc_pkey_get_key_type(kekek, &kekek_type);
-        hal_rpc_pkey_get_key_flags(kekek, &kekek_flags);
+        check(hal_rpc_pkey_get_key_type(kekek, &kekek_type));
+        check(hal_rpc_pkey_get_key_flags(kekek, &kekek_flags));
 
         if (kekek_type == HAL_KEY_TYPE_RSA_PRIVATE &&
            (kekek_flags & HAL_KEY_FLAG_USAGE_KEYENCIPHERMENT) != 0)
