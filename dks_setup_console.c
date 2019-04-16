@@ -133,9 +133,41 @@ void SendSetupJSON(ThreadArguments *args, char *command)
     while (*ptr != '}') ptr++;
     *ptr = 0;
 
+    int rval = 0;
+    if (strcmp(masterkey, "None") != 0)
+    {
+        rval = open_cryptech_device_cty();
+
+        if (rval == 0)
+        {
+            if (strlen(masterkey) == 0)
+            {
+                // random master key
+                rval = cty_setmasterkey(pin, NULL);
+            }
+            else
+            {       
+                // user has a master key to use
+                rval = cty_setmasterkey(pin, masterkey);
+            }
+        }
+
+        // make sure we've logged out
+        cty_logout();
+
+        rval = close_cryptech_device_cty();
+    }
+
+    if (rval != 0)
+    {
+        printf("Unable to set master key.");
+        dks_send_file_none(args->tls);
+        return;
+    }
+
     uint32_t handle = get_random_handle();
 
-    int rval = init_cryptech_device(pin, handle);
+    rval = init_cryptech_device(pin, handle);
 
     if (rval != 0)
     {

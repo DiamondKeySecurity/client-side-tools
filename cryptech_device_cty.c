@@ -107,6 +107,40 @@ int cty_login(char *pin)
     return HAL_OK;
 }
 
+int cty_setmasterkey(char *pin, char *masterkey)
+{
+    int MAX_RETRIES = 60;
+    char read_buffer[1024];
+    int read_count;
+
+    // make sure the device has been logged in
+    check(cty_login(pin));
+
+    // get the command to send
+    char cmd[256];
+    if (masterkey != NULL)
+    {
+        snprintf(cmd, sizeof(cmd)/sizeof(char), "masterkey set %s\r", masterkey);
+    }
+    else
+    {
+        strcpy(cmd, "masterkey set\r");
+    }
+
+    // send the command
+    check(cty_write(cmd));
+
+    // if the outout contains failed, then it didn't work
+    check(cty_read_wait(read_buffer, &read_count, sizeof(read_buffer), MAX_RETRIES));
+    if (strstr(read_buffer, "Failed") != NULL) return HAL_ERROR_MASTERKEY_FAIL;
+
+    // show the master key
+    printf("%s", read_buffer);
+
+    // make sure the device has been logged out
+    return cty_logout();
+}
+
 int cty_write(char *cmd)
 {
     if(cmd == NULL) return HAL_ERROR_BAD_ARGUMENTS;
@@ -165,8 +199,6 @@ int cty_read_wait(char *result_buffer, int *read_count, int result_max, int max_
     {
         return HAL_ERROR_IO_TIMEOUT;
     }
-
-    printf("%i %s", rval, result_buffer);
 
     return rval;
 }
