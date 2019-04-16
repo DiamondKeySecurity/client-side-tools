@@ -16,5 +16,6 @@ int cty_write(char *cmd);
 int cty_read(char *result_buffer, int *read_count, int result_max);
 int cty_read_wait(char *result_buffer, int *read_count, int result_max, int max_retries);
 int cty_login(char *pin);
+int cty_logout();
 
 #endif

@@ -61,12 +61,10 @@ int strendswith(char *str, const char *ending)
     return strcmp(&str[str_len - ending_len], ending) == 0;
 }
 
-int cty_login(char *pin)
+int cty_logout()
 {
-    int r, timeouts = 0;
-
     char read_buffer[1024];
-    int read_count, MAX_RETRIES = 10, PASSWORD_WAIT = 60;
+    int read_count, MAX_RETRIES = 10;
 
     // make sure the device has been logged out
     check(cty_write("\rlogout\r\r"));
@@ -75,6 +73,17 @@ int cty_login(char *pin)
     check(cty_read_wait(read_buffer, &read_count, sizeof(read_buffer), MAX_RETRIES));
     if (strendswith(read_buffer, "Username: ") == 0)
         return HAL_ERROR_NOT_READY;
+
+    return HAL_OK;
+}
+
+int cty_login(char *pin)
+{
+    char read_buffer[1024];
+    int read_count, MAX_RETRIES = 10, PASSWORD_WAIT = 60;
+
+    // make sure the device has been logged out
+    check(cty_logout());
 
     // log in using the wheel account
 
