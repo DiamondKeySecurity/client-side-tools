@@ -43,7 +43,7 @@ int open_cryptech_device_cty()
     }
 
     tty.c_cc[VMIN] = 0;
-    tty.c_cc[VTIME] = 100; // wait upto 10 seconds before timing out
+    tty.c_cc[VTIME] = 5; // wait upto 3 seconds before timing out
 
     if (tcsetattr(serial_get_fd(), TCSANOW, &tty) < 0)
         return HAL_ERROR_IO_OS_ERROR;
@@ -63,53 +63,39 @@ int strendswith(char *str, const char *ending)
 
 int cty_login(char *pin)
 {
-    char *result;
-    const int MAX_TIMEOUTS = 10;
     int r, timeouts = 0;
 
+    char read_buffer[1024];
+    int read_count, MAX_RETRIES = 10, PASSWORD_WAIT = 60;
+
+    // make sure the device has been logged out
     check(cty_write("\rlogout\r\r"));
-    while((r = cty_read(&result, "Username: ")) != HAL_OK)
-    {
-        if (r != HAL_ERROR_IO_TIMEOUT)
-        {
-            return r;
-        }
-        else
-        {
-            if(strendswith(result, "Password: "))
-            {
-                // must free after the compare but before the check
-                free(result);
 
-                check(cty_write("\r"));
-            }
-            else
-            {
-                // we haven't gotten the prompt that we want yet
-                free(result);                    
-            }
+    // wait for the username prompt
+    check(cty_read_wait(read_buffer, &read_count, sizeof(read_buffer), MAX_RETRIES));
+    if (strendswith(read_buffer, "Username: ") == 0)
+        return HAL_ERROR_NOT_READY;
 
-            ++timeouts;
-            if(timeouts > MAX_TIMEOUTS)
-            {
-                return r;
-            }
-        }
-        
-    }
+    // log in using the wheel account
 
+    // send the user name
     check(cty_write("wheel\r"));
 
-    check(cty_read(&result, "Password: "));
-    free(result);
+    // wait for the password prompt
+    check(cty_read_wait(read_buffer, &read_count, sizeof(read_buffer), MAX_RETRIES));
+    if (strendswith(read_buffer, "Password: ") == 0)
+        return HAL_ERROR_NOT_READY;
 
+    // send the pin
     check(cty_write(pin));
     check(cty_write("\r"));
 
-    check(cty_read(&result, "cryptech> "));
-    free(result);
+    // wait for the cryptech prompt
+    check(cty_read_wait(read_buffer, &read_count, sizeof(read_buffer), PASSWORD_WAIT));
+    if (strendswith(read_buffer, "cryptech> ") == 0)
+        return HAL_ERROR_PIN_INCORRECT;
 
-    return 0;
+    return HAL_OK;
 }
 
 int cty_write(char *cmd)
@@ -126,73 +112,52 @@ int cty_write(char *cmd)
     }
 }
 
-int cty_read(char **result, const char *prompt)
+int cty_read(char *result_buffer, int *read_count, int result_max)
+// reads data until result_max or a timeout on the stream
 {
-    if(result == NULL) return HAL_ERROR_BAD_ARGUMENTS;
+    if(result_buffer == NULL || read_count == NULL) return HAL_ERROR_BAD_ARGUMENTS;
+
+    // read data until the stream timesout
+    int i = 0;
+    result_buffer[0] = 0; // mark the end of the string in case there is an error
 
     int rval = HAL_OK;
 
-    // get the output until prompt
-    int prompt_len = strlen(prompt);
-    int prompt_index = 0;
-
-    int buffer_length = 32;
-    int i = 0;
-    char *output = malloc(buffer_length);
-    if(output == NULL)
+    while ((rval = serial_recv_char(&result_buffer[i])) == HAL_OK &&
+           i < result_max-1) 
     {
-        return HAL_ERROR_ALLOCATION_FAILURE;
-    }
-    output[0] = 0; // mark the end of the string incase there is an error
-
-    while (prompt_index < prompt_len)
-    {
-        // make sure the buffer is big enough
-        if(i >= (buffer_length-1))
-        {
-            buffer_length *= 2;
-
-            char *new_output = realloc(output, buffer_length);
-            if(new_output == NULL)
-            {
-                free(output);
-                return HAL_ERROR_ALLOCATION_FAILURE;
-            }
-            output = new_output;
-        }
-
-        int rval = serial_recv_char(&output[i]);
-
-        if(rval != 0)
-        {
-            if (i > 0)
-            {
-                rval = HAL_ERROR_IO_TIMEOUT;
-                goto read_done;
-            }
-
-            free(output);
-            return rval;
-        }
-
-        // check to see if we're getting the cryptech prompt
-        if(output[i] == prompt[prompt_index])
-        {
-            ++prompt_index;
-        }
-        else
-        {
-            prompt_index = 0;
-        }
-        
         ++i;
-        output[i] = 0;
+        result_buffer[i] = 0; // mark the end of the string
     }
 
-read_done:
-    *result = output;
+    *read_count = i;
 
-    printf("%s\r\n", output);
+    // if we just timed out, that's ok. We just ran out of data
+    if (rval == HAL_ERROR_IO_TIMEOUT) return HAL_OK;
+    else return rval;
+}
+
+int cty_read_wait(char *result_buffer, int *read_count, int result_max, int max_retries)
+{
+    int current_try = 0;
+    int rval;
+
+    if(result_buffer == NULL || read_count == NULL) return HAL_ERROR_BAD_ARGUMENTS;
+
+    while ((rval = cty_read(result_buffer, read_count, result_max)) == HAL_OK &&
+           *read_count == 0 &&
+           current_try < max_retries)
+    {
+        ++current_try;   
+    }
+
+    // return timeout if we didn't get anything
+    if (read_count == 0 && rval == HAL_OK)
+    {
+        return HAL_ERROR_IO_TIMEOUT;
+    }
+
+    printf("%i %s", rval, result_buffer);
 
     return rval;
 }
