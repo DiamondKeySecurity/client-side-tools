@@ -121,6 +121,7 @@ int setup_backup_destination(uint32_t handle)
         if (kekek_type == HAL_KEY_TYPE_RSA_PRIVATE &&
            (kekek_flags & HAL_KEY_FLAG_USAGE_KEYENCIPHERMENT) != 0)
         {
+            printf("\r\nAttempting to use existing KEYENCIPHERMENT key.\r\n");
             memcpy(&result_kekek_uuid, &uuids[i], sizeof(hal_uuid_t));
 
             size_t pub_key_len = hal_rpc_pkey_get_public_key_len(kekek);
@@ -135,7 +136,11 @@ int setup_backup_destination(uint32_t handle)
             {
                 // prevent a memory leak
                 free(result_kekek_public_key);
-                check(result);
+                
+                // don't stop here. See if there's another acceptable key.
+                // If not, the next step will create another one
+                result_kekek_public_key = NULL;
+                printf("\r\nThe existing KEYENCIPHERMENT key is not usable.\r\n");
             }
             
             break;
@@ -147,6 +152,7 @@ int setup_backup_destination(uint32_t handle)
     // try to generate a key
     if (result_kekek_public_key == NULL)
     {
+        printf("\r\nAttempting to generate a new KEYENCIPHERMENT key.\r\n");
         hal_pkey_handle_t kekek;
         hal_uuid_t name;
 
