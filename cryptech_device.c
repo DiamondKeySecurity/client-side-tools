@@ -36,7 +36,7 @@
 static const unsigned char const_0x010001[] = { 0x01, 0x00, 0x01 };
 
 // Internal Functions --------------------------------------------------
-char *create_setup_json_string(hal_uuid_t kekek_uuid, uint8_t *kekek_public_key, unsigned int pub_key_len);
+char *create_setup_json_string(hal_uuid_t kekek_uuid, uint8_t *kekek_public_key, unsigned int pub_key_len, int device_index);
 char uuid_to_string(hal_uuid_t uuid, char *buffer);
 char *split_b64_string(const char *b64data);
 
@@ -88,7 +88,7 @@ uint32_t get_random_handle()
     return handle;
 }
 
-int setup_backup_destination(uint32_t handle, char **json_result)
+int setup_backup_destination(uint32_t handle, int device_index, char **json_result)
 {
     if (json_result == NULL) return HAL_ERROR_BAD_ARGUMENTS;
 
@@ -213,7 +213,7 @@ int setup_backup_destination(uint32_t handle, char **json_result)
         }
     }
 
-    *json_result = create_setup_json_string(result_kekek_uuid, result_kekek_public_key, (unsigned int)pub_key_len);
+    *json_result = create_setup_json_string(result_kekek_uuid, result_kekek_public_key, (unsigned int)pub_key_len, device_index);
 
     if (result_kekek_public_key != NULL)
     {
@@ -280,7 +280,7 @@ char uuid_to_string(hal_uuid_t uuid, char *buffer)
             );
 }
 
-char *create_setup_json_string(hal_uuid_t kekek_uuid, uint8_t *kekek_public_key, unsigned int pub_key_len)
+char *create_setup_json_string(hal_uuid_t kekek_uuid, uint8_t *kekek_public_key, unsigned int pub_key_len, int device_index)
 {
     unsigned int b64size = b64e_size(pub_key_len)+1;
 
@@ -300,13 +300,13 @@ char *create_setup_json_string(hal_uuid_t kekek_uuid, uint8_t *kekek_public_key,
     uuid_to_string(kekek_uuid, kekek_uuid_string);
 
     // create our json
-    const char *format = "{\n    \"comment\": \"KEKEK public key\",\n    \"kekek_pubkey\": [\n%s\n    ],\n    \"kekek_uuid\": \"%s\"\n}";
+    const char *format = "{\n    \"device_index\": %i,\n    \"comment\": \"KEKEK public key\",\n    \"kekek_pubkey\": [\n%s\n    ],\n    \"kekek_uuid\": \"%s\"\n}";
 
-    int buffer_size = snprintf(NULL, 0, format, public_key_string, kekek_uuid_string) + 1;
+    int buffer_size = snprintf(NULL, 0, format, device_index, public_key_string, kekek_uuid_string) + 1;
 
     char *json_result = malloc(buffer_size);
 
-    snprintf(json_result, buffer_size, format, public_key_string, kekek_uuid_string);
+    snprintf(json_result, buffer_size, format, device_index, public_key_string, kekek_uuid_string);
 
     // free remaining temporary data
     free(public_key_string);

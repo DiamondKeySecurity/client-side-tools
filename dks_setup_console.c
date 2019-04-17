@@ -134,6 +134,7 @@ void SendSetupJSON(ThreadArguments *args, char *command)
     // skip command code and ':RECV:{'
     char *masterkey = &command[11];
     char *pin;
+    char *device_index;
 
     char *ptr = masterkey;
 
@@ -147,6 +148,16 @@ void SendSetupJSON(ThreadArguments *args, char *command)
     // find the end of the pin option
     while (*ptr != '}') ptr++;
     *ptr = 0;
+
+    // get the beginning of the device_index
+    device_index = ptr + 2;    
+
+    // find the end of the device_index option
+    while (*ptr != '}') ptr++;
+    *ptr = 0;
+
+    int device;
+    sscanf(device_index, "%i", &device);
 
     int rval = 0;
     if (strcmp(masterkey, "None") != 0)
@@ -192,7 +203,7 @@ void SendSetupJSON(ThreadArguments *args, char *command)
     else
     {
         char *setup_json;
-        rval = setup_backup_destination(handle, &setup_json);
+        rval = setup_backup_destination(handle, device, &setup_json);
 
         if (rval == 0)
         {
