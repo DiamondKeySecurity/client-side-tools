@@ -191,12 +191,11 @@ void SendSetupJSON(ThreadArguments *args, char *command)
     }
     else
     {
-        rval = setup_backup_destination(handle);
+        char *setup_json;
+        rval = setup_backup_destination(handle, &setup_json);
 
         if (rval == 0)
         {
-            char *setup_json = "[]\n";
-
             dks_send_file_mem(args->tls, setup_json, strlen(setup_json));
         }
         else

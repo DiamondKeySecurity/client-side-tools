@@ -7,6 +7,8 @@
 	Thank you for inspiration:
 	http://www.codeproject.com/Tips/813146/Fast-base-functions-for-encode-decode
 */
+// Copyright 2019 Diamond Key Security
+// changed encode and decode to use "char *"" instead of "int *"" for binary data
 
 #include "base64.h"
 
@@ -53,7 +55,7 @@ unsigned int b64d_size(unsigned int in_size) {
 	return ((3*in_size)/4);
 }
 
-unsigned int b64_encode(const unsigned int* in, unsigned int in_len, unsigned char* out) {
+unsigned int b64_encode(const unsigned char* in, unsigned int in_len, unsigned char* out) {
 
 	unsigned int i=0, j=0, k=0, s[3];
 	
@@ -86,7 +88,7 @@ unsigned int b64_encode(const unsigned int* in, unsigned int in_len, unsigned ch
 	return k;
 }
 
-unsigned int b64_decode(const unsigned char* in, unsigned int in_len, unsigned int* out) {
+unsigned int b64_decode(const unsigned char* in, unsigned int in_len, unsigned char* out) {
 
 	unsigned int i=0, j=0, k=0, s[4];
 	

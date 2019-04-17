@@ -21,6 +21,8 @@
 
 #include <hal.h>
 
+#include "libs/base64.c/base64.h"
+
 // check(op) - Copyright (c) 2016, NORDUnet A/S
 #define check(op)                                               \
     do {                                                        \
@@ -33,7 +35,13 @@
 
 static const unsigned char const_0x010001[] = { 0x01, 0x00, 0x01 };
 
+// Internal Functions --------------------------------------------------
+char *create_setup_json_string(hal_uuid_t kekek_uuid, uint8_t *kekek_public_key, unsigned int pub_key_len);
+char uuid_to_string(hal_uuid_t uuid, char *buffer);
+char *split_b64_string(const char *b64data);
 
+
+// Function Implementations --------------------------------------------
 int init_cryptech_device(char *pin, uint32_t handle)
 {
     hal_client_handle_t client = {handle};
@@ -80,8 +88,11 @@ uint32_t get_random_handle()
     return handle;
 }
 
-int setup_backup_destination(uint32_t handle)
+int setup_backup_destination(uint32_t handle, char **json_result)
 {
+    if (json_result == NULL) return HAL_ERROR_BAD_ARGUMENTS;
+
+    *json_result = NULL;
     // """
     // Set up backup HSM for subsequent import.
     // Generates an RSA keypair with appropriate usage settings
@@ -94,6 +105,7 @@ int setup_backup_destination(uint32_t handle)
 
     hal_uuid_t result_kekek_uuid;
     uint8_t *result_kekek_public_key = NULL;
+    size_t pub_key_len;
 
     const int MAX_UUIDS = 64;
     hal_uuid_t uuids[MAX_UUIDS];
@@ -139,7 +151,7 @@ int setup_backup_destination(uint32_t handle)
             printf("\r\nAttempting to use existing KEYENCIPHERMENT key.\r\n");
             memcpy(&result_kekek_uuid, &uuids[i], sizeof(hal_uuid_t));
 
-            size_t pub_key_len = hal_rpc_pkey_get_public_key_len(kekek);
+            pub_key_len = hal_rpc_pkey_get_public_key_len(kekek);
             result_kekek_public_key = (uint8_t *)malloc(pub_key_len);
             size_t der_len;
 
@@ -185,7 +197,7 @@ int setup_backup_destination(uint32_t handle)
 
         memcpy(&result_kekek_uuid, &name, sizeof(hal_uuid_t));
 
-        size_t pub_key_len = hal_rpc_pkey_get_public_key_len(kekek);
+        pub_key_len = hal_rpc_pkey_get_public_key_len(kekek);
         result_kekek_public_key = (uint8_t *)malloc(pub_key_len);
         size_t der_len;
 
@@ -201,6 +213,8 @@ int setup_backup_destination(uint32_t handle)
         }
     }
 
+    *json_result = create_setup_json_string(result_kekek_uuid, result_kekek_public_key, (unsigned int)pub_key_len);
+
     if (result_kekek_public_key != NULL)
     {
         free(result_kekek_public_key);
@@ -208,26 +222,94 @@ int setup_backup_destination(uint32_t handle)
         return 0;
     }
 
+    if (*json_result == NULL) return HAL_ERROR_ALLOCATION_FAILURE;
+
     return 1;
+}
 
-    // b64 pubkey
-    // uuid to string
+char *split_b64_string(const char *b64data)
+{
+    const int CHARS_IN_ROW = 76;
+    unsigned int len = strlen(b64data);
 
+    int rows = (len / CHARS_IN_ROW) + 1;
+    char *splitbuffer = malloc(((CHARS_IN_ROW + 12) * rows) + 1); // '        "..",\n
+    if (splitbuffer == NULL) return NULL;
+    splitbuffer[0] = 0;
+    int count = 0;
+    int index = 0;
 
-    // if not result and not args.uuid:
-    //     with hsm.pkey_generate_rsa(
-    //             keylen = args.keylen,
-    //             flags = HAL_KEY_FLAG_USAGE_KEYENCIPHERMENT | HAL_KEY_FLAG_TOKEN) as kekek:
-    //         result.update(kekek_uuid   = str(kekek.uuid),
-    //                       kekek_pubkey = b64(kekek.public_key))
-    // if not result:
-    //     sys.exit("Could not find suitable KEKEK")
+    for (unsigned int i = 0; i < len; ++i)
+    {
+        if (count == 0)
+        {
+            if (index > 0) strcat(splitbuffer, "\",\n");
+            strcat(splitbuffer, "        \"");
+            index = strlen(splitbuffer);
+        }
+        splitbuffer[index++] = b64data[i];
+        count = (count + 1) % 76;
+    }
+    strcat(splitbuffer, "\"");
 
-    // if args.soft_backup:
-    //     result.update(comment = "KEKEK software keypair")
-    // else:
-    //     result.update(comment = "KEKEK public key")
+    return splitbuffer;
+}
 
-    // json.dump(result, args.output, indent = 4, sort_keys = True)
-    // args.output.write("\n")
+//4700438d-4ac9-4561-823e-4f74c38de219
+// buffer must be at least 40 characters
+char uuid_to_string(hal_uuid_t uuid, char *buffer)
+{
+    // sorry for implementing this this way, but it was so easy.
+    sprintf(buffer, "%x%x%x%x-%x%x-%x%x-%x%x-%x%x%x%x%x%x",
+            (unsigned int)uuid.uuid[0],
+            (unsigned int)uuid.uuid[1],
+            (unsigned int)uuid.uuid[2],
+            (unsigned int)uuid.uuid[3],
+            (unsigned int)uuid.uuid[4],
+            (unsigned int)uuid.uuid[5],
+            (unsigned int)uuid.uuid[6],
+            (unsigned int)uuid.uuid[7],
+            (unsigned int)uuid.uuid[8],
+            (unsigned int)uuid.uuid[9],
+            (unsigned int)uuid.uuid[10],
+            (unsigned int)uuid.uuid[11],
+            (unsigned int)uuid.uuid[12],
+            (unsigned int)uuid.uuid[13],
+            (unsigned int)uuid.uuid[14],
+            (unsigned int)uuid.uuid[15]
+            );
+}
+
+char *create_setup_json_string(hal_uuid_t kekek_uuid, uint8_t *kekek_public_key, unsigned int pub_key_len)
+{
+    unsigned int b64size = b64e_size(pub_key_len)+1;
+
+    // make sure the allocation was successful
+    unsigned char *b64data = malloc(b64size);
+    if(b64data == NULL) return NULL;
+
+    // encode the public key
+    unsigned int num_bytes = b64_encode((const unsigned char *)kekek_public_key, pub_key_len, b64data);
+
+    // split b64 like the way CrypTech does it in Python
+    char *public_key_string = split_b64_string(b64data);
+    free(b64data);
+    if(public_key_string == NULL) return NULL;
+
+    char kekek_uuid_string[40];
+    uuid_to_string(kekek_uuid, kekek_uuid_string);
+
+    // create our json
+    const char *format = "{\n    \"comment\": \"KEKEK public key\",\n    \"kekek_pubkey\": [\n%s\n    ],\n    \"kekek_uuid\": \"%s\"\n}";
+
+    int buffer_size = snprintf(NULL, 0, format, public_key_string, kekek_uuid_string) + 1;
+
+    char *json_result = malloc(buffer_size);
+
+    snprintf(json_result, buffer_size, format, public_key_string, kekek_uuid_string);
+
+    // free remaining temporary data
+    free(public_key_string);
+
+    return json_result;
 }
