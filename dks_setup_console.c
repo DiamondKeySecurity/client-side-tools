@@ -220,6 +220,67 @@ void SendSetupJSON(ThreadArguments *args, char *command)
     close_cryptech_device(handle);
 }
 
+void RecvKEKEKFromHSM(ThreadArguments *args, char *command)
+{
+    // get pin and masterkey from options
+    // skip command code and ':RECV:{'
+    char *masterkey = &command[11];
+    char *pin;
+    char *device_index;
+    char *num_bytes_to_receive_string;
+
+    char *ptr = masterkey;
+
+    // find the end of the master key option
+    while (*ptr != '}') ptr++;
+    *ptr = 0;
+
+    // get the beginning of the pin
+    pin = ptr + 2;
+
+    // find the end of the pin option
+    while (*ptr != '}') ptr++;
+    *ptr = 0;
+
+    // get the beginning of the device_index
+    device_index = ptr + 2;    
+
+    // find the end of the device_index option
+    while (*ptr != '}') ptr++;
+    *ptr = 0;
+
+    // get the beginning of the num_bytes_to_receive
+    num_bytes_to_receive_string = ptr + 2;    
+
+    // find the end of the num_bytes_to_receive option
+    while (*ptr != '}') ptr++;
+    *ptr = 0;
+
+    int device;
+    sscanf(device_index, "%i", &device); 
+
+    int num_bytes_to_receive;
+    sscanf(num_bytes_to_receive_string, "%i", &num_bytes_to_receive); 
+    printf("bytes to received: %i", num_bytes_to_receive);
+
+    // get the data
+    char *json = dks_recv_from_hsm(args->tls, num_bytes_to_receive);
+
+    if (json == NULL)
+    {
+        printf("\ndks_setup_console: Unable to receive data from HSM\r\n");
+    }
+    else
+    {
+        printf("RECEIVED:'%s'\r\n", json);
+    }
+    
+}
+
+void RecvExportDataFromHSM(ThreadArguments *args, char *command)
+{
+}
+
 void handle_special_command(ThreadArguments *args, char *command)
 {
     // make sure nothing else gets sent during our transfer
@@ -240,6 +301,14 @@ void handle_special_command(ThreadArguments *args, char *command)
     else if (code == MGMTCODE_RECIEVE_RMT_KEKEK)
     {
         SendSetupJSON(args, command);
+    }
+    else if (code == MGMTCODE_SEND_LCL_KEKEK)
+    {
+        RecvKEKEKFromHSM(args, command);
+    }
+    else if (code == MGMTCODE_SEND_EXPORT_DATA)
+    {
+        RecvExportDataFromHSM(args, command);
     }
 
     // allow other things during transfer
