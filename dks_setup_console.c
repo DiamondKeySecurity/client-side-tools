@@ -274,11 +274,35 @@ void RecvKEKEKFromHSM(ThreadArguments *args, char *command)
     {
         printf("RECEIVED:'%s'\r\n", json);
     }
-    
 }
 
 void RecvExportDataFromHSM(ThreadArguments *args, char *command)
 {
+    // get pin and masterkey from options
+    // skip command code and ':RECV:{'
+    char *num_bytes_to_receive_string = &command[11];
+
+    char *ptr = num_bytes_to_receive_string;
+
+    // find the end of the num_bytes_to_receive_string key option
+    while (*ptr != '}') ptr++;
+    *ptr = 0;
+
+    int num_bytes_to_receive;
+    sscanf(num_bytes_to_receive_string, "%i", &num_bytes_to_receive); 
+    printf("bytes to received: %i", num_bytes_to_receive);
+
+    // get the data
+    char *json = dks_recv_from_hsm(args->tls, num_bytes_to_receive);
+
+    if (json == NULL)
+    {
+        printf("\ndks_setup_console: Unable to receive data from HSM\r\n");
+    }
+    else
+    {
+        printf("RECEIVED:'%s'\r\n", json);
+    }
 }
 
 void handle_special_command(ThreadArguments *args, char *command)
