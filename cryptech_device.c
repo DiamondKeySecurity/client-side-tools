@@ -38,7 +38,9 @@ static const unsigned char const_0x010001[] = { 0x01, 0x00, 0x01 };
 
 // Internal Functions --------------------------------------------------
 char *create_setup_json_string(hal_uuid_t kekek_uuid, uint8_t *kekek_public_key, unsigned int pub_key_len, int device_index);
-char uuid_to_string(hal_uuid_t uuid, char *buffer);
+char *uuid_to_string(hal_uuid_t uuid, char *buffer);
+hal_uuid_t string_to_uuid(char *name);
+
 char *split_b64_string(const char *b64data);
 
 
@@ -229,6 +231,8 @@ int setup_backup_destination(uint32_t handle, int device_index, char **json_resu
 int import_keys(uint32_t handle, char *json_string)
 {
     if (json_string == NULL) return HAL_ERROR_BAD_ARGUMENTS;
+
+    int rval = 0;
     
     hal_client_handle_t client = {handle};
     hal_session_handle_t session = {0};
@@ -238,22 +242,32 @@ int import_keys(uint32_t handle, char *json_string)
     diamond_json_ptr_t json_ptr;
 
     // get the KEKEK
-    char kekek_uuid_buffer[32], *json_search_ptr = json_string;
-    char *kekek_uuid = djson_find_element("kekek_uuid", kekek_uuid_buffer, 32, &json_search_ptr);
+    char kekek_uuid_buffer[40], *json_search_ptr = json_string;
+    char *kekek_uuid_s = djson_find_element("kekek_uuid", kekek_uuid_buffer, 40, &json_search_ptr);
 
-    if (kekek_uuid == NULL)
+    if (kekek_uuid_s == NULL)
     {
         printf("\r\n'kekek_uuid' not found in export JSON.\r\n");
-    }
-    else
-    {
-        printf("\r\nkekek_uuid: '%s'\r\n", kekek_uuid);
+        return HAL_ERROR_ASSERTION_FAILED;
     }
 
-    // starting JSON parser
+    // starting JSON parser before opening KEKEK just incase there is an error
     diamond_json_error_t result = djson_start_parser(json_string, &json_ptr, pool, sizeof(pool)/sizeof(diamond_json_node_t));
+    if (result != DJSON_OK) return HAL_ERROR_BAD_ARGUMENTS;
 
-    return 0;
+
+    // open the KEKEK
+    hal_pkey_handle_t kekek;
+    hal_uuid_t kekek_uuid = string_to_uuid(kekek_uuid_s);
+
+    check(hal_rpc_pkey_open(client, session, &kekek, &kekek_uuid));
+
+    printf("YAY!!!");
+    // parse the JSON
+
+    check(hal_rpc_pkey_close(kekek));
+
+    return HAL_OK;
 }
 
 char *split_b64_string(const char *b64data)
@@ -286,10 +300,10 @@ char *split_b64_string(const char *b64data)
 
 //4700438d-4ac9-4561-823e-4f74c38de219
 // buffer must be at least 40 characters
-char uuid_to_string(hal_uuid_t uuid, char *buffer)
+char *uuid_to_string(hal_uuid_t uuid, char *buffer)
 {
     // sorry for implementing this this way, but it was so easy.
-    sprintf(buffer, "%x%x%x%x-%x%x-%x%x-%x%x-%x%x%x%x%x%x",
+    sprintf(buffer, "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
             (unsigned int)uuid.uuid[0],
             (unsigned int)uuid.uuid[1],
             (unsigned int)uuid.uuid[2],
@@ -307,6 +321,36 @@ char uuid_to_string(hal_uuid_t uuid, char *buffer)
             (unsigned int)uuid.uuid[14],
             (unsigned int)uuid.uuid[15]
             );
+
+    return buffer;
+}
+
+hal_uuid_t string_to_uuid(char *name)
+{
+    // sorry for implementing this this way, but it was so easy.
+    hal_uuid_t uuid;
+    char temp[3];
+    temp[2] = 0;
+    int i = 0, j = 0;
+
+    while (*name != 0 && j < 16)
+    {
+        if ((*name >= '0' && *name <= '9') ||
+            (*name >= 'a' && *name <= 'f') ||
+            (*name >= 'A' && *name <= 'F'))
+        {
+            temp[i++] = *name;
+            if(i == 2)
+            {
+                unsigned int t;
+                sscanf(temp, "%x", &t);
+                uuid.uuid[j++] = (char)t;
+                i = 0;
+            }
+        }
+        ++name;
+    }
+    return uuid;
 }
 
 char *create_setup_json_string(hal_uuid_t kekek_uuid, uint8_t *kekek_public_key, unsigned int pub_key_len, int device_index)
