@@ -39,7 +39,7 @@ LIBHAL_BLD	?= ${LIBS_DIR}/libhal
 LIBTFM_SRC	?= ${CRYPTECH_ROOT}/sw/thirdparty/libtfm
 LIBTFM_BLD	?= ${LIBS_DIR}/libtfm
 
-LIBJSMN_SRC := libs/jsmn
+LIBDJSON_SRC := libs/djson
 LIBB64_SRC := libs/base64.c
 
 LIBS	:= ${LIBHAL_BLD}/libhal.a ${LIBDKS_BUILD}/libdks.a ${LIBTFM_BLD}/libtfm.a
@@ -47,7 +47,7 @@ LIBS	:= ${LIBHAL_BLD}/libhal.a ${LIBDKS_BUILD}/libdks.a ${LIBTFM_BLD}/libtfm.a
 all : bin/dks_setup_console
 
 bin/dks_setup_console : dks_setup_console.o cryptech_device.o serial.o cryptech_device_cty.o base64.o jsmn.o ${LIBS}
-	gcc dks_setup_console.o cryptech_device.o serial.o cryptech_device_cty.o base64.o jsmn.o ${LIBS} ${LIBRESSL_LIBS} -lpthread  -o bin/dks_setup_console
+	gcc dks_setup_console.o cryptech_device.o serial.o cryptech_device_cty.o base64.o djson.o ${LIBS} ${LIBRESSL_LIBS} -lpthread  -o bin/dks_setup_console
 
 dks_setup_console.o : dks_setup_console.c
 	gcc -I${LIBERSSL_INCLUDE} -I${LIBDKS_SRC} -O -c dks_setup_console.c
@@ -61,8 +61,8 @@ cryptech_device_cty.o : cryptech_device_cty.c cryptech_device_cty.h
 base64.o : ${LIBB64_SRC}/base64.c ${LIBB64_SRC}/base64.h
 	gcc -O -c ${LIBB64_SRC}/base64.c
 
-jsmn.o : ${LIBJSMN_SRC}/jsmn.c ${LIBJSMN_SRC}/jsmn.h
-	gcc -O -c ${LIBJSMN_SRC}/jsmn.c
+djson.o : ${LIBDJSON_SRC}/djson.c ${LIBDJSON_SRC}/djson.h
+	gcc -O -c ${LIBDJSON_SRC}/djson.c
 
 serial.o : serial.c serial.h
 	gcc -I${LIBHAL_SRC} -O -c serial.c

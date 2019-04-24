@@ -22,6 +22,7 @@
 #include <hal.h>
 
 #include "libs/base64.c/base64.h"
+#include "libs/djson/djson.h"
 
 // check(op) - Copyright (c) 2016, NORDUnet A/S
 #define check(op)                                               \
@@ -218,13 +219,27 @@ int setup_backup_destination(uint32_t handle, int device_index, char **json_resu
     if (result_kekek_public_key != NULL)
     {
         free(result_kekek_public_key);
-
-        return 0;
     }
 
     if (*json_result == NULL) return HAL_ERROR_ALLOCATION_FAILURE;
 
-    return 1;
+    return 0;
+}
+
+int import_keys(uint32_t handle, char *json_string)
+{
+    if (json_string == NULL) return HAL_ERROR_BAD_ARGUMENTS;
+    
+    hal_client_handle_t client = {handle};
+    hal_session_handle_t session = {0};
+
+    // pool of nodes. must be the maximum depth
+    diamond_json_node_t pool[8];
+    diamond_json_ptr_t json_ptr;
+
+    diamond_json_error_t result = djson_start_parser(json_string, &json_ptr, pool, sizeof(pool)/sizeof(diamond_json_node_t));
+
+    return 0;
 }
 
 char *split_b64_string(const char *b64data)

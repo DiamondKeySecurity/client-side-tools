@@ -32,7 +32,7 @@ int _djson_isNumber(char *s);
 
 // starts the parser and parses the first element
 diamond_json_error_t djson_start_parser(char *json_data, diamond_json_ptr_t *json_ptr,
-                                               diamond_json_node_t *pool, int pool_size)
+                                        diamond_json_node_t *pool, int pool_size)
 {
     json_ptr->node_pool = pool;
     json_ptr->node_pool_size = pool_size;
@@ -379,6 +379,49 @@ diamond_json_error_t _djson_get_node_from_pool(diamond_json_ptr_t *json_ptr, dia
     {
         return DJSON_ERROR_NODEPOOL_EMPTY;
     }
+}
+
+// searches a json string pointed to by json_data and returns the value
+// json_data will be updated to point after this element for additional
+// searches. Element must be <string> : <string or primitive>
+// name must be in quotes. "\"example\""
+char *djson_find_element(const char *name, char *buffer, int maxlen, char **json_data)
+{
+    char *ptr = *json_data;
+
+    char *element = strstr(ptr, name);
+
+    if (element == NULL) return NULL;
+
+    // we found the element. Now get the value
+    ptr = element + strlen(name);
+
+    ptr = _djson_get_next_non_whitespace(ptr+1);
+    if (*ptr != ':') return NULL; // format error
+
+    // goto the value
+    ptr = _djson_get_next_non_whitespace(ptr+1);
+
+    diamond_json_type_t lookahead = _djson_type_lookahead(*ptr);
+
+    // check to make sure this is a valid type
+    if (lookahead != DJSON_TYPE_String && lookahead != DJSON_TYPE_Primitive) return NULL;
+
+    // if string, skip the initial '"'
+    if (lookahead == DJSON_TYPE_String) ptr++;
+
+    int i = 0;
+    while (*ptr != 0 && *ptr != ' ' && *ptr != '"' && *ptr != '\t' && *ptr != '\r' && *ptr != '\n' && *ptr != ',' && i < maxlen-1)
+    {
+        buffer[i++] = *ptr;
+        ++ptr;
+    }
+    buffer[i] = 0;
+
+    // update the ptr
+    *json_data = ptr;
+
+    return buffer;
 }
 
 // reads the string pointed by pointer until '"' to get a string.

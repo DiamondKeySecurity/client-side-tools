@@ -26,5 +26,6 @@ int close_cryptech_device(uint32_t handle);
 uint32_t get_random_handle();
 
 int setup_backup_destination(uint32_t handle, int device_index, char **json_result);
+int import_keys(uint32_t handle, char *json_data);
 
 #endif

@@ -280,11 +280,19 @@ void RecvExportDataFromHSM(ThreadArguments *args, char *command)
 {
     // get pin and masterkey from options
     // skip command code and ':RECV:{'
-    char *num_bytes_to_receive_string = &command[11];
+    char *pin = &command[11];
+    char *num_bytes_to_receive_string;
 
-    char *ptr = num_bytes_to_receive_string;
+    char *ptr = pin;
 
-    // find the end of the num_bytes_to_receive_string key option
+    // find the end of the pin key option
+    while (*ptr != '}') ptr++;
+    *ptr = 0;
+
+    // get the beginning of the num_bytes_to_receive
+    num_bytes_to_receive_string = ptr + 2;
+
+    // find the end of the num_bytes_to_receive option
     while (*ptr != '}') ptr++;
     *ptr = 0;
 
@@ -301,7 +309,31 @@ void RecvExportDataFromHSM(ThreadArguments *args, char *command)
     }
     else
     {
-        printf("RECEIVED:'%s'\r\n", json);
+        uint32_t handle = get_random_handle();
+
+        int rval = init_cryptech_device(pin, handle);
+
+        if (rval != 0)
+        {
+            printf("unable to log into CrypTech device");
+            dks_send_file_none(args->tls);
+        }
+        else
+        {
+            char *setup_json;
+            rval = import_keys(handle, json);
+
+            if (rval == 0)
+            {
+                printf("Backup complete\r\n");
+            }
+            else
+            {
+                printf("Unable to save export data to CrypTech device.\r\n");
+            }
+        }
+
+        close_cryptech_device(handle);
     }
 }
 
