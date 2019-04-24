@@ -237,6 +237,20 @@ int import_keys(uint32_t handle, char *json_string)
     diamond_json_node_t pool[8];
     diamond_json_ptr_t json_ptr;
 
+    // get the KEKEK
+    char kekek_uuid_buffer[32], *json_search_ptr = json_string;
+    char *kekek_uuid = djson_find_element("kekek_uuid", kekek_uuid_buffer, 32, &json_search_ptr);
+
+    if (kekek_uuid == NULL)
+    {
+        printf("\r\n'kekek_uuid' not found in export JSON.\r\n");
+    }
+    else
+    {
+        printf("\r\nkekek_uuid: '%s'\r\n", kekek_uuid);
+    }
+
+    // starting JSON parser
     diamond_json_error_t result = djson_start_parser(json_string, &json_ptr, pool, sizeof(pool)/sizeof(diamond_json_node_t));
 
     return 0;

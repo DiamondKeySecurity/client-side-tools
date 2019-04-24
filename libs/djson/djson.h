@@ -125,4 +125,7 @@ diamond_json_error_t djson_get_value_current(diamond_json_ptr_t *json_ptr, char 
 // goes to the next sibling if the node has siblings and no children
 diamond_json_error_t djson_goto_next_element(diamond_json_ptr_t *json_ptr);
 
+// utility function that returns the value of a JSON token
+char *djson_find_element(const char *name, char *buffer, int maxlen, char **json_data);
+
 #endif

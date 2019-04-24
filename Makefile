@@ -46,7 +46,7 @@ LIBS	:= ${LIBHAL_BLD}/libhal.a ${LIBDKS_BUILD}/libdks.a ${LIBTFM_BLD}/libtfm.a
 
 all : bin/dks_setup_console
 
-bin/dks_setup_console : dks_setup_console.o cryptech_device.o serial.o cryptech_device_cty.o base64.o jsmn.o ${LIBS}
+bin/dks_setup_console : dks_setup_console.o cryptech_device.o serial.o cryptech_device_cty.o base64.o djson.o ${LIBS}
 	gcc dks_setup_console.o cryptech_device.o serial.o cryptech_device_cty.o base64.o djson.o ${LIBS} ${LIBRESSL_LIBS} -lpthread  -o bin/dks_setup_console
 
 dks_setup_console.o : dks_setup_console.c

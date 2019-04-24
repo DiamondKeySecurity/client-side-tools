@@ -384,7 +384,6 @@ diamond_json_error_t _djson_get_node_from_pool(diamond_json_ptr_t *json_ptr, dia
 // searches a json string pointed to by json_data and returns the value
 // json_data will be updated to point after this element for additional
 // searches. Element must be <string> : <string or primitive>
-// name must be in quotes. "\"example\""
 char *djson_find_element(const char *name, char *buffer, int maxlen, char **json_data)
 {
     char *ptr = *json_data;
@@ -392,11 +391,12 @@ char *djson_find_element(const char *name, char *buffer, int maxlen, char **json
     char *element = strstr(ptr, name);
 
     if (element == NULL) return NULL;
+ 
 
     // we found the element. Now get the value
     ptr = element + strlen(name);
 
-    ptr = _djson_get_next_non_whitespace(ptr+1);
+    ptr = _djson_get_next_non_whitespace(ptr+1); // skip the quotation mark
     if (*ptr != ':') return NULL; // format error
 
     // goto the value
