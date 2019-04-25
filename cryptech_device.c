@@ -296,6 +296,7 @@ int import_keys(uint32_t handle, char *json_string)
 
             dks_json_check(djson_get_type_current(&json_ptr, &json_type));
         }
+        printf("--------------------------\r\n");
     }
 
 finished:

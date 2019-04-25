@@ -444,7 +444,6 @@ diamond_json_error_t djson_pass(diamond_json_ptr_t *json_ptr)
         diamond_json_error_t result = djson_goto_next_element(json_ptr);
         if (result != DJSON_OK)
         {
-            printf("Error: %i\r\n", result);
             return result;
         }
 
@@ -604,6 +603,8 @@ diamond_json_error_t _djson_read_primitive(char **ptr, char *result, int result_
 
     if (*s == 0) return DJSON_ERROR_UNEXPECTED_EOF;
 
+    if (len > result_len) len = result_len;
+
     // don't mark the end of our string because we could destroy important structural data
 
     // set ptr to just after our string
@@ -612,11 +613,14 @@ diamond_json_error_t _djson_read_primitive(char **ptr, char *result, int result_
     // set the result
     strncpy(result, string, len);
 
+    // null terminate result
+    result[len] = 0;
+
     // make sure this is a valid primitive
     if ((strcmp(result, "true") != 0) &&
         (strcmp(result, "false") != 0) &&
         (strcmp(result, "null") != 0) &&
-        (_djson_isNumber(string) == 0))
+        (_djson_isNumber(result) == 0))
     {
         return DJSON_ERROR_INVALID_SYNTAX;
     }
