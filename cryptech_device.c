@@ -42,7 +42,8 @@ char *uuid_to_string(hal_uuid_t uuid, char *buffer);
 hal_uuid_t string_to_uuid(char *name);
 
 char *split_b64_string(const char *b64data);
-
+diamond_json_error_t djson_ext_join_decodeb64string(diamond_json_ptr_t *json_ptr, char **decoded_result, unsigned int *result_len);
+int process_attributes(diamond_json_ptr_t *json_ptr);
 
 // Function Implementations --------------------------------------------
 int init_cryptech_device(char *pin, uint32_t handle)
@@ -245,6 +246,13 @@ int import_keys(uint32_t handle, char *json_string)
     diamond_json_node_t pool[8];
     diamond_json_ptr_t json_ptr;
 
+    char *pkcs8 = NULL;
+    unsigned int pkcs8_len;
+    char *kek = NULL;
+    unsigned int kek_len;
+    char *spki = NULL;
+    unsigned int spki_len;
+
     // get the KEKEK
     char kekek_uuid_buffer[40], *json_search_ptr = json_string;
     char *kekek_uuid_s = djson_find_element("kekek_uuid", kekek_uuid_buffer, 40, &json_search_ptr);
@@ -271,6 +279,9 @@ int import_keys(uint32_t handle, char *json_string)
     // parse the JSON
     while (1)
     {
+        char *uuid_string = NULL;
+        int flags;
+
         // should be an object
         dks_json_check(djson_goto_next_element(&json_ptr));
 
@@ -290,84 +301,94 @@ int import_keys(uint32_t handle, char *json_string)
             char *name;
             dks_json_check(djson_get_name_current(&json_ptr, &name));
 
-            char *uuid_string = NULL;
-            int flags;
+            printf("%s:", name);
 
-            if (strcmp(name, "pkcs8") == 0 && json_type == DJSON_TYPE_Array) process_pkcs8(&json_ptr);
-            else if (strcmp(name, "kek") == 0 && json_type == DJSON_TYPE_Array) process_kek(&json_ptr);
-            else if (strcmp(name, "spki") == 0 && json_type == DJSON_TYPE_Array) process_spki(&json_ptr);
-            else if (strcmp(name, "attributes") == 0 && json_type == DJSON_TYPE_Object) process_attributes(&json_ptr);
-            else if (strcmp(name, "comment") == 0 && json_type == DJSON_TYPE_String) { dks_json_check(djson_pass(&json_ptr)); }
+            if (strcmp(name, "pkcs8") == 0 && json_type == DJSON_TYPE_Array)
+                djson_ext_join_decodeb64string(&json_ptr, &pkcs8, &pkcs8_len);
+            else if (strcmp(name, "kek") == 0 && json_type == DJSON_TYPE_Array)
+                djson_ext_join_decodeb64string(&json_ptr, &kek, &kek_len);
+            else if (strcmp(name, "spki") == 0 && json_type == DJSON_TYPE_Array)
+                djson_ext_join_decodeb64string(&json_ptr, &spki, &spki_len);
+            else if (strcmp(name, "attributes") == 0 && json_type == DJSON_TYPE_Object)
+                process_attributes(&json_ptr);
             else if (strcmp(name, "uuid") == 0 && json_type == DJSON_TYPE_String)
             {
                 dks_json_check(djson_get_string_value_current(&json_ptr, &uuid_string));
 
-                printf("UUID:%s", uuid_string);
+                printf("%s\r\n", uuid_string);
             }
             else if (strcmp(name, "flags") == 0 && json_type == DJSON_TYPE_Primitive)
             {
                 dks_json_check(djson_get_integer_primitive_current(&json_ptr, &flags));
-                printf("Flags:%i", flags);
+                printf("%i\r\n", flags);
             }
+            else if (strcmp(name, "comment") == 0 && json_type == DJSON_TYPE_String) { printf("\r\n"); }
             else
             {
                 dks_json_throw(HAL_ERROR_BAD_ARGUMENTS);
             }
-            
-
-            printf("'%s:%i'\r\n", name, (int)json_type);
 
             dks_json_check(djson_pass(&json_ptr));
 
             dks_json_check(djson_get_type_current(&json_ptr, &json_type));
         }
+
+        // we know have all of our data from JSON
+        hal_uuid_t uuid = string_to_uuid(uuid_string);
+
+        // free temporary data
+        free(pkcs8);
+        free(kek);
+        free(spki);
+        pkcs8 = NULL;
+        kek = NULL;
+        spki = NULL;        
         printf("--------------------------\r\n");
     }
 
 finished:
     check(hal_rpc_pkey_close(kekek));
+    free(pkcs8);
+    free(kek);
+    free(spki);
 
     return rval;
 }
 
-void process_pkcs8(diamond_json_ptr_t *json_ptr)
+int process_attributes(diamond_json_ptr_t *json_ptr)
 {
     diamond_json_error_t result;
     int rval = HAL_OK;
+
+    printf("\r\n");
 
 finished:
 
     return rval;
 }
 
-void process_kek(diamond_json_ptr_t *json_ptr)
+diamond_json_error_t djson_ext_join_decodeb64string(diamond_json_ptr_t *json_ptr, char **decoded_result,
+                                                    unsigned int *result_len)
 {
-    diamond_json_error_t result;
-    int rval = HAL_OK;
+    *decoded_result = NULL;
+    char *b64data;
+    char *decoded_data;
+    unsigned int b64data_len;
+    
+    diamond_json_error_t result = djson_join_string_array(json_ptr, &b64data);
+    if (result != DJSON_OK) return result;
 
-finished:
+    unsigned int b64data_len = strlen(b64data);
 
-    return rval;
-}
+    unsigned int decoded_size = b64d_size(b64data_len);
 
-void process_attributes(diamond_json_ptr_t *json_ptr)
-{
-    diamond_json_error_t result;
-    int rval = HAL_OK;
+    // make sure the allocation was successful
+    decoded_data = malloc(decoded_size);
+    if(decoded_data == NULL) return DJSON_ERROR_MEMORY;
 
-finished:
+    *result_len = b64_decode(b64data, b64data_len, decoded_data);
 
-    return rval;
-}
-
-void process_spki(diamond_json_ptr_t *json_ptr)
-{
-    diamond_json_error_t result;
-    int rval = HAL_OK;
-
-finished:
-
-    return rval;
+    return result;
 }
 
 char *split_b64_string(const char *b64data)

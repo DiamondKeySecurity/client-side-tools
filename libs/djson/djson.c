@@ -453,36 +453,39 @@ diamond_json_error_t djson_pass(diamond_json_ptr_t *json_ptr)
     return DJSON_OK;
 }
 
-diamond_json_error_t djson_join_string_array(diamond_json_ptr_t *json_ptr, char *result)
+diamond_json_error_t djson_join_string_array(diamond_json_ptr_t *json_ptr, char **results)
 // destructively joins all of the strings in an array to get one contatenated string
 {
+    *results = NULL;
     diamond_json_error_t result = DJSON_OK;
     char *result_string = NULL;
     diamond_json_type_t type;
+    char *s;
 
     // get the first part
-    result = djson_goto_next_element(&json_ptr);
+    result = djson_goto_next_element(json_ptr);
     if (result != DJSON_OK) return result;
 
-    result = djson_get_type_current(&json_ptr, &type);
+    result = djson_get_type_current(json_ptr, &type);
     if (result != DJSON_OK) return result;
 
     while (type != DJSON_TYPE_ArrayEnd)
     {
-        if (type != DJSON_TYPE_String) return NULL;
+        if (type != DJSON_TYPE_String) return DJSON_ERROR_BAD_ARGUMENTS;
 
         // just get the first one
         if (result_string == NULL)
         {
-            result = djson_get_string_value_current(&json_ptr, &result_string);
+            result = djson_get_string_value_current(json_ptr, &result_string);
             if (result != DJSON_OK) return result;
+
+            s = result_string + strlen(result_string);
         }
         else
         {
             // get the next string
-            char *s = result_string + strlen(result_string);
             char *new_string;
-            result = djson_get_string_value_current(&json_ptr, &new_string);
+            result = djson_get_string_value_current(json_ptr, &new_string);
             if (result != DJSON_OK) return result;
 
             // attach the strings, they may overlap so don't use strcpy
@@ -491,12 +494,14 @@ diamond_json_error_t djson_join_string_array(diamond_json_ptr_t *json_ptr, char 
         }
 
         // get the next part
-        result = djson_goto_next_element(&json_ptr);
+        result = djson_goto_next_element(json_ptr);
         if (result != DJSON_OK) return result;
 
-        result = djson_get_type_current(&json_ptr, &type);
+        result = djson_get_type_current(json_ptr, &type);
         if (result != DJSON_OK) return result;
     }
+
+    *results = result_string;
 
     return result;
 }

@@ -39,6 +39,7 @@ typedef enum
     DJSON_ERROR_NOT_A_PRIMITIVE = 18,
     DJSON_ERROR_NOT_A_NUMBER = 19,
     DJSON_ERROR_NODEPOOL_EMPTY = 20,
+    DJSON_ERROR_MEMORY = 21,
     DJSON_EOF
 } diamond_json_error_t;
 
@@ -163,7 +164,7 @@ diamond_json_error_t djson_parse_until(diamond_json_ptr_t *json_ptr, char *name,
 diamond_json_error_t djson_pass(diamond_json_ptr_t *json_ptr);
 
 // parses an array of strings and joins all of the strings together.
-diamond_json_error_t djson_join_string_array(diamond_json_ptr_t *json_ptr, char *result);
+diamond_json_error_t djson_join_string_array(diamond_json_ptr_t *json_ptr, char **results);
 
 // utility function that returns the value of a JSON token
 char *djson_find_element(const char *name, char *buffer, int maxlen, char **json_data);
