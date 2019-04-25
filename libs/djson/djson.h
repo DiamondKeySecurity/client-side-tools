@@ -35,8 +35,10 @@ typedef enum
     DJSON_ERROR_UNEXPECTED_COMMA = 14,
     DJSON_ERROR_INVALID_SYNTAX = 15,
     DJSON_ERROR_UNEXPECTED_STRING = 16,
-    DJSON_ERROR_NOT_A_VALUE_TYPE = 17,
-    DJSON_ERROR_NODEPOOL_EMPTY = 18,
+    DJSON_ERROR_NOT_A_STRING = 17,
+    DJSON_ERROR_NOT_A_PRIMITIVE = 18,
+    DJSON_ERROR_NOT_A_NUMBER = 19,
+    DJSON_ERROR_NODEPOOL_EMPTY = 20,
     DJSON_EOF
 } diamond_json_error_t;
 
@@ -64,21 +66,38 @@ typedef enum _diamond_json_type
     DJSON_TYPE_Undefined
 } diamond_json_type_t;
 
+typedef enum _diamond_primitive_value
+{
+    DJSON_PRIMITIVE_true,
+    DJSON_PRIMITIVE_false,
+    DJSON_PRIMITIVE_null,
+    DJSON_PRIMITIVE_integer,
+    DJSON_PRIMITIVE_real,
+    DJSON_PRIMITIVE_NotAPrimitive,
+} diamond_primitive_value_t;
 
 typedef struct _diamond_json_node
 {
+    // the type of this node
+    diamond_json_type_t type;
+
     // parsed name of this object
     char *name;
 
-    // parsed value, for primitive types only
-    // for objects and list, this will point
-    // to the first character of the first
-    // child object, but it shouldn't be used
-    // directly by a user
-    char *value;
+    // parsed value, for strings only.
+    // For all other types, this will be NULL
+    char *string_value;
 
-    // the type of this node
-    diamond_json_type_t type;
+    // if the node is a primitive, this is the
+    // value. string_value will be null
+    diamond_primitive_value_t primitive_value;
+
+    // if the primitive is a number, store the
+    // value here
+    union {
+        int int_value;
+        float real_value;
+    } primitive_number;
 
     // parent element
     struct _diamond_json_node *parent;
@@ -119,11 +138,29 @@ diamond_json_error_t djson_get_type_current(diamond_json_ptr_t *json_ptr, diamon
 // gets the name of the current element
 diamond_json_error_t djson_get_name_current(diamond_json_ptr_t *json_ptr, char **result);
 
+// gets the value of the current element, if it is a string type
+diamond_json_error_t djson_get_string_value_current(diamond_json_ptr_t *json_ptr, char **result);
+
 // gets the value of the current element, if it is a primitive type
-diamond_json_error_t djson_get_value_current(diamond_json_ptr_t *json_ptr, char **result);
+diamond_json_error_t djson_get_primitive_value_current(diamond_json_ptr_t *json_ptr, diamond_primitive_value_t *result);
+
+// gets the value of the current element, if it is a number type
+diamond_json_error_t djson_get_integer_primitive_current(diamond_json_ptr_t *json_ptr, int *result);
+
+// gets the value of the current element, if it is a number type
+diamond_json_error_t djson_get_real_primitive_current(diamond_json_ptr_t *json_ptr, float *result);
+
+// returns 1 if the current element is a number
+int djson_is_current_a_number(diamond_json_ptr_t *json_ptr);
 
 // goes to the next sibling if the node has siblings and no children
 diamond_json_error_t djson_goto_next_element(diamond_json_ptr_t *json_ptr);
+
+// parse the json until it finds an element with the name and type
+diamond_json_error_t djson_parse_until(diamond_json_ptr_t *json_ptr, char *name, diamond_json_type_t type);
+
+// goto the next element skipping any children of the current element
+diamond_json_error_t djson_pass(diamond_json_ptr_t *json_ptr);
 
 // utility function that returns the value of a JSON token
 char *djson_find_element(const char *name, char *buffer, int maxlen, char **json_data);

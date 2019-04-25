@@ -13,6 +13,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, If not, see <https://www.gnu.org/licenses/>.
 //
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -21,7 +22,8 @@
 // Internal function declataion
 diamond_json_error_t _djson_get_node_from_pool(diamond_json_ptr_t *json_ptr, diamond_json_node_t **node);
 diamond_json_error_t _djson_read_string(char **ptr, char **result);
-diamond_json_error_t _djson_read_primitive(char **ptr, char **result);
+diamond_json_error_t _djson_read_primitive(char **ptr, char *result, int result_len);
+diamond_json_error_t _djson_set_node_primitive(diamond_json_node_t *node, char *primitive_value);
 char *_djson_get_next_non_whitespace(char *string);
 int _djson_isNumeric(char c);
 int _djson_isAlpha(char c);
@@ -69,17 +71,75 @@ diamond_json_error_t djson_get_name_current(diamond_json_ptr_t *json_ptr, char *
 }
 
 // gets the value of the current element, if it is a primitive type
-diamond_json_error_t djson_get_value_current(diamond_json_ptr_t *json_ptr, char **result)
+diamond_json_error_t djson_get_string_value_current(diamond_json_ptr_t *json_ptr, char **result)
 {
     *result = NULL;
     if (json_ptr == NULL || json_ptr->current_element == NULL) return DJSON_ERROR_BAD_ARGUMENTS;
 
-    if (json_ptr->current_element->value == NULL) return DJSON_ERROR_NOT_A_VALUE_TYPE;
+    if (json_ptr->current_element->type != DJSON_TYPE_String || 
+        json_ptr->current_element->string_value == NULL) return DJSON_ERROR_NOT_A_STRING;
 
-    *result = json_ptr->current_element->value;
+    *result = json_ptr->current_element->string_value;
 
     return DJSON_OK;
 }
+
+diamond_json_error_t djson_get_primitive_value_current(diamond_json_ptr_t *json_ptr, diamond_primitive_value_t *result)
+{
+    *result = DJSON_PRIMITIVE_NotAPrimitive;
+    if (json_ptr == NULL || json_ptr->current_element == NULL) return DJSON_ERROR_BAD_ARGUMENTS;
+
+    if (json_ptr->current_element->type != DJSON_TYPE_Primitive || 
+        json_ptr->current_element->primitive_value == DJSON_PRIMITIVE_NotAPrimitive) return DJSON_ERROR_NOT_A_PRIMITIVE;
+
+    *result = json_ptr->current_element->primitive_value;
+
+    return DJSON_OK;
+}
+
+diamond_json_error_t djson_get_integer_primitive_current(diamond_json_ptr_t *json_ptr, int *result)
+{
+    *result = 0;
+    if (json_ptr == NULL || json_ptr->current_element == NULL) return DJSON_ERROR_BAD_ARGUMENTS;
+
+    if (json_ptr->current_element->type != DJSON_TYPE_Primitive || 
+        json_ptr->current_element->primitive_value == DJSON_PRIMITIVE_NotAPrimitive) return DJSON_ERROR_NOT_A_PRIMITIVE;
+
+    if (json_ptr->current_element->primitive_value == DJSON_PRIMITIVE_integer)
+        *result = json_ptr->current_element->primitive_number.int_value;
+    else if (json_ptr->current_element->primitive_value == DJSON_PRIMITIVE_real)
+        *result = (int)json_ptr->current_element->primitive_number.real_value;
+    else return DJSON_ERROR_NOT_A_NUMBER;
+
+    return DJSON_OK;
+}
+
+diamond_json_error_t djson_get_real_primitive_current(diamond_json_ptr_t *json_ptr, float *result)
+{
+    *result = 0;
+    if (json_ptr == NULL || json_ptr->current_element == NULL) return DJSON_ERROR_BAD_ARGUMENTS;
+
+    if (json_ptr->current_element->type != DJSON_TYPE_Primitive || 
+        json_ptr->current_element->primitive_value == DJSON_PRIMITIVE_NotAPrimitive) return DJSON_ERROR_NOT_A_PRIMITIVE;
+
+    if (json_ptr->current_element->primitive_value == DJSON_PRIMITIVE_integer)
+        *result = (float)json_ptr->current_element->primitive_number.int_value;
+    else if (json_ptr->current_element->primitive_value == DJSON_PRIMITIVE_real)
+        *result = json_ptr->current_element->primitive_number.real_value;
+    else return DJSON_ERROR_NOT_A_NUMBER;
+
+    return DJSON_OK;
+}
+
+int djson_is_current_a_number(diamond_json_ptr_t *json_ptr)
+{
+    return (json_ptr != NULL && json_ptr->current_element != NULL &&
+            json_ptr->current_element->type == DJSON_TYPE_Primitive && 
+            (json_ptr->current_element->primitive_value == DJSON_PRIMITIVE_integer ||
+             json_ptr->current_element->primitive_value == DJSON_PRIMITIVE_real));
+
+}
+
 
 int _djson_pop_top_element(diamond_json_ptr_t *json_ptr)
 {
@@ -179,6 +239,8 @@ diamond_json_error_t djson_goto_next_element(diamond_json_ptr_t *json_ptr)
     {
         diamond_json_node_t *parent = node->parent;
 
+        char primitive_buffer[128]; // primitive max 127 characters for long numbers
+
         switch (lookahead)
         {
             case DJSON_TYPE_Object:
@@ -256,7 +318,7 @@ diamond_json_error_t djson_goto_next_element(diamond_json_ptr_t *json_ptr)
                         case DJSON_TYPE_Undefined:
                             return DJSON_ERROR_INVALID_SYNTAX;
                         case DJSON_TYPE_String:
-                            result = _djson_read_string(&ptr, &(node->value));
+                            result = _djson_read_string(&ptr, &(node->string_value));
                             if (result != DJSON_OK) return result;
 
                             // prepar for the next object. we really just need to make sure we
@@ -268,7 +330,10 @@ diamond_json_error_t djson_goto_next_element(diamond_json_ptr_t *json_ptr)
                             json_ptr->ptr = ptr;
                             break;
                         case DJSON_TYPE_Primitive:
-                            result = _djson_read_primitive(&ptr, &(node->value));
+                            result = _djson_read_primitive(&ptr, primitive_buffer, sizeof(primitive_buffer)/sizeof(char));
+                            if (result != DJSON_OK) return result;
+
+                            result = _djson_set_node_primitive(node, primitive_buffer);
                             if (result != DJSON_OK) return result;
 
                             // prepar for the next object. we really just need to make sure we
@@ -286,7 +351,7 @@ diamond_json_error_t djson_goto_next_element(diamond_json_ptr_t *json_ptr)
                     // should be "value",
 
                     // get the value
-                    diamond_json_error_t result = _djson_read_string(&ptr, &(node->value));
+                    diamond_json_error_t result = _djson_read_string(&ptr, &(node->string_value));
                     if (result != DJSON_OK) return result;
 
                     // get the ','
@@ -309,7 +374,10 @@ diamond_json_error_t djson_goto_next_element(diamond_json_ptr_t *json_ptr)
                 {
                     // should be value,
                     // get the value
-                    diamond_json_error_t result = _djson_read_primitive(&ptr, &(node->value));
+                    result = _djson_read_primitive(&ptr, primitive_buffer, sizeof(primitive_buffer)/sizeof(char));
+                    if (result != DJSON_OK) return result;
+
+                    result = _djson_set_node_primitive(node, primitive_buffer);
                     if (result != DJSON_OK) return result;
 
                     // get the ','
@@ -333,52 +401,57 @@ diamond_json_error_t djson_goto_next_element(diamond_json_ptr_t *json_ptr)
     return DJSON_OK;
 }
 
-diamond_json_type_t _djson_type_lookahead(char next_char)
+diamond_json_error_t djson_parse_until(diamond_json_ptr_t *json_ptr, char *name, diamond_json_type_t type)
 {
-    switch (next_char)
-    {
-        case '{':
-            return DJSON_TYPE_Object;
-        case '}':
-            return DJSON_TYPE_ObjectEnd;
-        case '[':
-            return DJSON_TYPE_Array;
-        case ']':
-            return DJSON_TYPE_ArrayEnd;
-        case '"':
-            return DJSON_TYPE_String;
-    }
+    char *_name;
+    diamond_json_type_t _type;
+    diamond_json_error_t result;
 
-    if (_djson_isAlpha(next_char) || _djson_isNumeric(next_char))
+    do
     {
-        // probably
-        return DJSON_TYPE_Primitive;
-    }
-    else
-    {
-        return DJSON_TYPE_Undefined;
-    }
-    
+        result = djson_goto_next_element(json_ptr);
+        if (result != DJSON_OK) return result;
+
+        djson_get_name_current(json_ptr, &_name);
+        djson_get_type_current(json_ptr, &_type);
+    } while ((_name == NULL) || (strcmp(_name, name) != 0) || (_type != type));
+
+    return DJSON_OK;
 }
 
-diamond_json_error_t _djson_get_node_from_pool(diamond_json_ptr_t *json_ptr, diamond_json_node_t **node)
+diamond_json_error_t djson_pass(diamond_json_ptr_t *json_ptr)
+// goto the next element skipping any children of the current element
 {
-    if ((node == NULL) || (json_ptr == NULL)) return DJSON_ERROR_BAD_ARGUMENTS;
+    diamond_json_type_t _type;
+    djson_get_type_current(json_ptr, &_type);
 
-    if (json_ptr->nodes_used < json_ptr->node_pool_size)
+    if (_type != DJSON_TYPE_Array &&
+        _type != DJSON_TYPE_Object)
     {
-        *node = &(json_ptr->node_pool[json_ptr->nodes_used++]);
-
-        (*node)->name = NULL;
-        (*node)->parent = NULL;
-        (*node)->value = NULL;
-
-        return DJSON_OK;
+        // these types don't have children
+        return djson_goto_next_element(json_ptr);
     }
-    else
+
+    int objects = 0, arrays = 0;
+    
+    do
     {
-        return DJSON_ERROR_NODEPOOL_EMPTY;
-    }
+        if (_type == DJSON_TYPE_Array) arrays++;
+        else if (_type == DJSON_TYPE_ArrayEnd) arrays--;
+        else if (_type == DJSON_TYPE_Object) objects++;
+        else if (_type == DJSON_TYPE_ObjectEnd) objects--;
+
+        diamond_json_error_t result = djson_goto_next_element(json_ptr);
+        if (result != DJSON_OK)
+        {
+            printf("Error: %i\r\n", result);
+            return result;
+        }
+
+        djson_get_type_current(json_ptr, &_type);
+    } while (arrays > 0 || objects > 0);
+
+    return DJSON_OK;
 }
 
 // searches a json string pointed to by json_data and returns the value
@@ -424,6 +497,57 @@ char *djson_find_element(const char *name, char *buffer, int maxlen, char **json
     return buffer;
 }
 
+// Internal functions -----------------------------------------------------
+
+diamond_json_type_t _djson_type_lookahead(char next_char)
+{
+    switch (next_char)
+    {
+        case '{':
+            return DJSON_TYPE_Object;
+        case '}':
+            return DJSON_TYPE_ObjectEnd;
+        case '[':
+            return DJSON_TYPE_Array;
+        case ']':
+            return DJSON_TYPE_ArrayEnd;
+        case '"':
+            return DJSON_TYPE_String;
+    }
+
+    if (_djson_isAlpha(next_char) || _djson_isNumeric(next_char))
+    {
+        // probably
+        return DJSON_TYPE_Primitive;
+    }
+    else
+    {
+        return DJSON_TYPE_Undefined;
+    }
+    
+}
+
+diamond_json_error_t _djson_get_node_from_pool(diamond_json_ptr_t *json_ptr, diamond_json_node_t **node)
+{
+    if ((node == NULL) || (json_ptr == NULL)) return DJSON_ERROR_BAD_ARGUMENTS;
+
+    if (json_ptr->nodes_used < json_ptr->node_pool_size)
+    {
+        *node = &(json_ptr->node_pool[json_ptr->nodes_used++]);
+
+        (*node)->name = NULL;
+        (*node)->parent = NULL;
+        (*node)->string_value = NULL;
+        (*node)->primitive_value = DJSON_PRIMITIVE_NotAPrimitive;
+
+        return DJSON_OK;
+    }
+    else
+    {
+        return DJSON_ERROR_NODEPOOL_EMPTY;
+    }
+}
+
 // reads the string pointed by pointer until '"' to get a string.
 // will return NULL if the string is empty. The final '"' will be
 // changed to '\0'. ptr will be updated to point to the next
@@ -466,37 +590,72 @@ diamond_json_error_t _djson_read_string(char **ptr, char **result)
 }
 
 // reads the out a primitive until a whitespace character or a comma.
-// The trailing whitespace character or comma will be changed to '\0'
 // ptr will be updated to point to the next character after the end
 // primitive
-diamond_json_error_t _djson_read_primitive(char **ptr, char **result)
+diamond_json_error_t _djson_read_primitive(char **ptr, char *result, int result_len)
 {
     char *string = *ptr; // get the beginning of our string
     char *s = string;
+    int len = 0;
 
     // search for the end of the string
-    while (*s != 0 && *s != ' ' && *s != '\t' && *s != '\r' && *s != '\n' && *s != ',') ++s;
+    while (*s != 0 && *s != ' ' && *s != '\t' && *s != '\r' && *s != '\n' &&
+           *s != ',' && *s != ']' && *s != '[' && *s != '{' && *s != '}') { ++len; ++s; }
 
     if (*s == 0) return DJSON_ERROR_UNEXPECTED_EOF;
 
-    // mark the end of our string
-    *s = 0;
+    // don't mark the end of our string because we could destroy important structural data
 
     // set ptr to just after our string
-    *ptr = s + 1;
+    *ptr = s;
 
     // set the result
-    *result = string;
+    strncpy(result, string, len);
 
     // make sure this is a valid primitive
-    if ((strcmp(string, "true") != 0) &&
-        (strcmp(string, "false") != 0) &&
-        (strcmp(string, "null") != 0) &&
+    if ((strcmp(result, "true") != 0) &&
+        (strcmp(result, "false") != 0) &&
+        (strcmp(result, "null") != 0) &&
         (_djson_isNumber(string) == 0))
     {
         return DJSON_ERROR_INVALID_SYNTAX;
     }
 
+    return DJSON_OK;
+}
+
+diamond_json_error_t _djson_set_node_primitive(diamond_json_node_t *node, char *primitive_value)
+{
+    if (node == NULL || primitive_value == NULL) return DJSON_ERROR_BAD_ARGUMENTS;
+
+    if (strcmp(primitive_value, "true") == 0)
+    {
+        node->primitive_value = DJSON_PRIMITIVE_true;
+    }
+    else if (strcmp(primitive_value, "false") == 0)
+    {
+        node->primitive_value = DJSON_PRIMITIVE_false;        
+    }
+    else if (strcmp(primitive_value, "null") == 0)
+    {
+        node->primitive_value = DJSON_PRIMITIVE_null;        
+    }
+    else if (_djson_isNumber(primitive_value))
+    {
+        if (strstr(primitive_value, ".") != NULL)
+        {
+            node->primitive_value = DJSON_PRIMITIVE_real;
+            sscanf(primitive_value, "%f", &(node->primitive_number.real_value));
+        }
+        else
+        {
+            node->primitive_value = DJSON_PRIMITIVE_integer;
+            sscanf(primitive_value, "%i", &(node->primitive_number.int_value));
+        }
+    }
+    else return DJSON_ERROR_INVALID_SYNTAX;
+
+    node->type = DJSON_TYPE_Primitive;
     return DJSON_OK;
 }
 

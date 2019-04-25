@@ -62,7 +62,7 @@ int main()
         diamond_json_type_t type;
         djson_get_type_current(&json_ptr, &type);
         djson_get_name_current(&json_ptr, &name);
-        djson_get_value_current(&json_ptr, &value);
+        djson_get_string_value_current(&json_ptr, &value);
 
         printf("\n--------------------\nType:%i\n", (int)type);
         if(name != NULL) printf("Name:%s\n", name);

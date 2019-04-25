@@ -228,11 +228,15 @@ int setup_backup_destination(uint32_t handle, int device_index, char **json_resu
     return 0;
 }
 
+#define dks_json_throw(a) { rval = a; goto finished; }
+
+#define dks_json_check(a) { result = (a); if (result != DJSON_OK) dks_json_throw(HAL_ERROR_BAD_ARGUMENTS); }
+
 int import_keys(uint32_t handle, char *json_string)
 {
     if (json_string == NULL) return HAL_ERROR_BAD_ARGUMENTS;
 
-    int rval = 0;
+    int rval = HAL_OK;
     
     hal_client_handle_t client = {handle};
     hal_session_handle_t session = {0};
@@ -255,6 +259,8 @@ int import_keys(uint32_t handle, char *json_string)
     diamond_json_error_t result = djson_start_parser(json_string, &json_ptr, pool, sizeof(pool)/sizeof(diamond_json_node_t));
     if (result != DJSON_OK) return HAL_ERROR_BAD_ARGUMENTS;
 
+    result = djson_parse_until(&json_ptr, "keys", DJSON_TYPE_Array);
+    if (result != DJSON_OK) return HAL_ERROR_BAD_ARGUMENTS;
 
     // open the KEKEK
     hal_pkey_handle_t kekek;
@@ -262,12 +268,60 @@ int import_keys(uint32_t handle, char *json_string)
 
     check(hal_rpc_pkey_open(client, session, &kekek, &kekek_uuid));
 
-    printf("YAY!!!");
     // parse the JSON
+    while (1)
+    {
+        // should be an object
+        dks_json_check(djson_goto_next_element(&json_ptr));
 
+        diamond_json_type_t json_type;
+        dks_json_check(djson_get_type_current(&json_ptr, &json_type));
+
+        if (json_type == DJSON_TYPE_ArrayEnd) break; // finished looking at all keys
+        else if (json_type != DJSON_TYPE_Object) dks_json_throw(HAL_ERROR_BAD_ARGUMENTS);
+
+        // go to the first element
+        dks_json_check(djson_goto_next_element(&json_ptr));
+        dks_json_check(djson_get_type_current(&json_ptr, &json_type));
+
+        // parse a key object
+        while (json_type != DJSON_TYPE_ObjectEnd)
+        {
+            char *name;
+            dks_json_check(djson_get_name_current(&json_ptr, &name));
+
+            printf("'%s:%i'\r\n", name, (int)json_type);
+
+            dks_json_check(djson_pass(&json_ptr));
+
+            dks_json_check(djson_get_type_current(&json_ptr, &json_type));
+        }
+    }
+
+finished:
     check(hal_rpc_pkey_close(kekek));
 
-    return HAL_OK;
+    return rval;
+}
+
+void process_pkcs8(diamond_json_ptr_t *json_ptr)
+{
+
+}
+
+void process_kek(diamond_json_ptr_t *json_ptr)
+{
+
+}
+
+void process_attributes(diamond_json_ptr_t *json_ptr)
+{
+
+}
+
+void process_spki(diamond_json_ptr_t *json_ptr)
+{
+
 }
 
 char *split_b64_string(const char *b64data)
