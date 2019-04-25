@@ -339,6 +339,103 @@ int import_keys(uint32_t handle, char *json_string)
         // we know have all of our data from JSON
         hal_uuid_t uuid = string_to_uuid(uuid_string);
 
+        hal_pkey_handle_t new_pkey = {0};
+        hal_uuid_t new_uuid;
+
+        // make sure we can parse the attributes before continuing
+        // pool of nodes. must be the maximum depth
+        diamond_json_node_t attr_pool[8];
+        diamond_json_ptr_t attr_json_ptr;
+
+        if(attr_json != NULL)
+        {
+            // starting JSON parser before opening KEKEK just incase there is an error
+            dks_json_check(djson_start_parser(attr_json, &attr_json_ptr, attr_pool, sizeof(attr_pool)/sizeof(diamond_json_node_t)));
+            if (result != DJSON_OK) return HAL_ERROR_BAD_ARGUMENTS;
+        }
+
+        if (pkcs8 != NULL && kek != NULL)
+        {
+            check(hal_rpc_pkey_import(client,
+                                      session,
+                                      &new_pkey,
+                                      &new_uuid,
+                                      kekek,
+                                      pkcs8, pkcs8_len,
+                                      kek, kek_len,
+                                      flags));
+
+            char temp_buffer[40];
+            printf("Imported %s as %s", uuid_string, uuid_to_string(new_uuid, temp_buffer));
+        }
+        else if (spki != NULL)
+        {
+            check(hal_rpc_pkey_load(client,
+                                    session,
+                                    &new_pkey,
+                                    &new_uuid,
+                                    spki, spki_len,
+                                    flags));
+
+            char temp_buffer[40];
+            printf("Loaded %s as %s", uuid_string, uuid_to_string(new_uuid, temp_buffer));
+        }
+        else
+        {
+            dks_json_throw(HAL_ERROR_BAD_ARGUMENTS);
+        }
+        
+        // save the attributes
+        if(attr_json != NULL)
+        {
+            diamond_json_type_t curr_attr_type;
+            dks_json_check(djson_goto_next_element(&attr_json_ptr));
+            dks_json_check(djson_get_type_current(&attr_json_ptr, &curr_attr_type));
+
+            while (curr_attr_type != DJSON_TYPE_ObjectEnd)
+            {
+                // igore all none array types
+                if (curr_attr_type == DJSON_TYPE_Array ||
+                    curr_attr_type == DJSON_TYPE_Primitive)
+                {
+                    char *decoded_data = NULL;
+                    unsigned int data_len;
+                    char *attr_name;
+
+                    dks_json_check(djson_get_name_current(&attr_json_ptr, &attr_name));
+
+                    hal_pkey_attribute_t pkey_attr;
+                    pkey_attr.type = atoi(attr_name);
+
+
+                    if(curr_attr_type == DJSON_TYPE_Array)
+                    {
+                        dks_json_check(djson_ext_join_decodeb64string(&attr_json_ptr, &decoded_data, &data_len));
+                        pkey_attr.value = decoded_data;
+                        pkey_attr.length = data_len;
+                    }
+                    else
+                    {
+                        pkey_attr.value = NULL;
+                        pkey_attr.length = 0xFFFFFFFF;
+                    }                  
+
+
+                    check(hal_rpc_pkey_set_attributes(new_pkey,
+                                                      &pkey_attr,
+                                                      1));
+                    free(decoded_data);
+                }
+
+                // get the next element
+                dks_json_check(djson_goto_next_element(&attr_json_ptr));
+                dks_json_check(djson_get_type_current(&attr_json_ptr, &curr_attr_type));
+            }
+        }
+
+        // close the new pkey
+        check(hal_rpc_pkey_close(new_pkey));
+
         // free temporary data
         free(pkcs8);
         free(kek);
@@ -348,7 +445,6 @@ int import_keys(uint32_t handle, char *json_string)
         kek = NULL;
         spki = NULL;
         attr_json = NULL;
-        printf("--------------------------\r\n");
     }
 
 finished:
@@ -380,6 +476,8 @@ diamond_json_error_t djson_ext_join_decodeb64string(diamond_json_ptr_t *json_ptr
     if(decoded_data == NULL) return DJSON_ERROR_MEMORY;
 
     *result_len = b64_decode(b64data, b64data_len, decoded_data);
+
+    *decoded_result = decoded_data;
 
     return result;
 }
