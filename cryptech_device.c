@@ -290,6 +290,31 @@ int import_keys(uint32_t handle, char *json_string)
             char *name;
             dks_json_check(djson_get_name_current(&json_ptr, &name));
 
+            char *uuid_string = NULL;
+            int flags;
+
+            if (strcmp(name, "pkcs8") == 0 && json_type == DJSON_TYPE_Array) process_pkcs8(&json_ptr);
+            else if (strcmp(name, "kek") == 0 && json_type == DJSON_TYPE_Array) process_kek(&json_ptr);
+            else if (strcmp(name, "spki") == 0 && json_type == DJSON_TYPE_Array) process_spki(&json_ptr);
+            else if (strcmp(name, "attributes") == 0 && json_type == DJSON_TYPE_Object) process_attributes(&json_ptr);
+            else if (strcmp(name, "comment") == 0 && json_type == DJSON_TYPE_String) { dks_json_check(djson_pass(&json_ptr)); }
+            else if (strcmp(name, "uuid") == 0 && json_type == DJSON_TYPE_String)
+            {
+                dks_json_check(djson_get_string_value_current(&json_ptr, &uuid_string));
+
+                printf("UUID:%s", uuid_string);
+            }
+            else if (strcmp(name, "flags") == 0 && json_type == DJSON_TYPE_Primitive)
+            {
+                dks_json_check(djson_get_integer_primitive_current(&json_ptr, &flags));
+                printf("Flags:%i", flags);
+            }
+            else
+            {
+                dks_json_throw(HAL_ERROR_BAD_ARGUMENTS);
+            }
+            
+
             printf("'%s:%i'\r\n", name, (int)json_type);
 
             dks_json_check(djson_pass(&json_ptr));
@@ -307,22 +332,42 @@ finished:
 
 void process_pkcs8(diamond_json_ptr_t *json_ptr)
 {
+    diamond_json_error_t result;
+    int rval = HAL_OK;
 
+finished:
+
+    return rval;
 }
 
 void process_kek(diamond_json_ptr_t *json_ptr)
 {
+    diamond_json_error_t result;
+    int rval = HAL_OK;
 
+finished:
+
+    return rval;
 }
 
 void process_attributes(diamond_json_ptr_t *json_ptr)
 {
+    diamond_json_error_t result;
+    int rval = HAL_OK;
 
+finished:
+
+    return rval;
 }
 
 void process_spki(diamond_json_ptr_t *json_ptr)
 {
+    diamond_json_error_t result;
+    int rval = HAL_OK;
 
+finished:
+
+    return rval;
 }
 
 char *split_b64_string(const char *b64data)

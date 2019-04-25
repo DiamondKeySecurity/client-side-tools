@@ -162,6 +162,9 @@ diamond_json_error_t djson_parse_until(diamond_json_ptr_t *json_ptr, char *name,
 // goto the next element skipping any children of the current element
 diamond_json_error_t djson_pass(diamond_json_ptr_t *json_ptr);
 
+// parses an array of strings and joins all of the strings together.
+diamond_json_error_t djson_join_string_array(diamond_json_ptr_t *json_ptr, char *result);
+
 // utility function that returns the value of a JSON token
 char *djson_find_element(const char *name, char *buffer, int maxlen, char **json_data);
 
