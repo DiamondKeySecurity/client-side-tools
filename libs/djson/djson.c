@@ -453,6 +453,46 @@ diamond_json_error_t djson_pass(diamond_json_ptr_t *json_ptr)
     return DJSON_OK;
 }
 
+diamond_json_error_t djson_skip_save_object(diamond_json_ptr_t *json_ptr, char **object_json)
+// skips the current json object and all children and returns an unaltered string of the json skipped
+{
+    if (json_ptr == NULL || json_ptr->current_element == NULL) return DJSON_ERROR_BAD_ARGUMENTS;
+    else if (json_ptr->current_element->type != DJSON_TYPE_Object) return DJSON_ERROR_NOT_AN_OBJECT;
+
+    // find the start. we move off the start so we need to go back and find it
+    char *ptr = json_ptr->ptr;
+
+    // do some pointer magic
+    while ((ptr > json_ptr->json_data) && *ptr != '{') --ptr;
+    if (*ptr != '{') return DJSON_ERROR_INVALID_SYNTAX;
+
+    char *start = ptr;
+
+    // count the first one
+    int num_objects = 1;
+    int len = 1;
+
+    do
+    {
+        ++ptr;
+        if (*ptr == '{') ++num_objects;
+        else if (*ptr == '}') --num_objects;
+        ++len;
+    } while (*ptr != 0 && num_objects > 0);
+
+    if (*ptr == 0) return DJSON_ERROR_UNEXPECTED_EOF;
+
+    // create buffer and copy
+    *object_json = malloc(len + 1);
+    strncpy(*object_json, start, len);
+    (*object_json)[len] = 0; // null terminate
+
+    // update the main pointer
+    json_ptr->ptr = ptr;
+
+    return djson_goto_next_element(json_ptr);
+}
+
 diamond_json_error_t djson_join_string_array(diamond_json_ptr_t *json_ptr, char **results)
 // destructively joins all of the strings in an array to get one contatenated string
 {

@@ -38,8 +38,9 @@ typedef enum
     DJSON_ERROR_NOT_A_STRING = 17,
     DJSON_ERROR_NOT_A_PRIMITIVE = 18,
     DJSON_ERROR_NOT_A_NUMBER = 19,
-    DJSON_ERROR_NODEPOOL_EMPTY = 20,
-    DJSON_ERROR_MEMORY = 21,
+    DJSON_ERROR_NOT_AN_OBJECT = 20,
+    DJSON_ERROR_NODEPOOL_EMPTY = 21,
+    DJSON_ERROR_MEMORY = 22,
     DJSON_EOF
 } diamond_json_error_t;
 
@@ -165,6 +166,10 @@ diamond_json_error_t djson_pass(diamond_json_ptr_t *json_ptr);
 
 // parses an array of strings and joins all of the strings together.
 diamond_json_error_t djson_join_string_array(diamond_json_ptr_t *json_ptr, char **results);
+
+// skips the current json object and all children and returns an unaltered string of the json skipped
+// This method will create a buffer to hold the string. Must use with "free(object_json);"
+diamond_json_error_t djson_skip_save_object(diamond_json_ptr_t *json_ptr, char **object_json);
 
 // utility function that returns the value of a JSON token
 char *djson_find_element(const char *name, char *buffer, int maxlen, char **json_data);
