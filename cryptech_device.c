@@ -407,6 +407,9 @@ int import_keys(uint32_t handle, char *json_string)
                     hal_pkey_attribute_t pkey_attr;
                     pkey_attr.type = atoi(attr_name);
 
+                    unsigned char bool_value;
+                    unsigned int uint_value;
+
 
                     if(curr_attr_type == DJSON_TYPE_Array)
                     {
@@ -416,8 +419,29 @@ int import_keys(uint32_t handle, char *json_string)
                     }
                     else
                     {
-                        pkey_attr.value = NULL;
-                        pkey_attr.length = 0xFFFFFFFF;
+                        int int_value;
+                        diamond_primitive_value_t prim_type;
+
+                        if (djson_get_integer_primitive_current(&attr_json_ptr, &int_value) == DJSON_OK)
+                        {
+                            if (int_value == 0 || int_value == 1)
+                            {
+                                bool_value = (unsigned char)int_value;
+                                pkey_attr.value = &bool_value;
+                                pkey_attr.length = sizeof(bool_value);
+                            }
+                            else
+                            {
+                                uint_value = (unsigned int)int_value;
+                                pkey_attr.value = &uint_value;
+                                pkey_attr.length = sizeof(uint_value);
+                            }
+                        }
+                        else
+                        {
+                            pkey_attr.value = NULL;
+                            pkey_attr.length = 0xFFFFFFFF;
+                        }
                     }                  
 
 

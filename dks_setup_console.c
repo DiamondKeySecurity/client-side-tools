@@ -261,7 +261,6 @@ void RecvKEKEKFromHSM(ThreadArguments *args, char *command)
 
     int num_bytes_to_receive;
     sscanf(num_bytes_to_receive_string, "%i", &num_bytes_to_receive); 
-    printf("bytes to received: %i", num_bytes_to_receive);
 
     // get the data
     char *json = dks_recv_from_hsm(args->tls, num_bytes_to_receive);
@@ -298,7 +297,6 @@ void RecvExportDataFromHSM(ThreadArguments *args, char *command)
 
     int num_bytes_to_receive;
     sscanf(num_bytes_to_receive_string, "%i", &num_bytes_to_receive); 
-    printf("bytes to received: %i", num_bytes_to_receive);
 
     // get the data
     char *json = dks_recv_from_hsm(args->tls, num_bytes_to_receive);
