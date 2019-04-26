@@ -46,6 +46,10 @@ typedef struct __ThreadArguments {
     bool can_write;
 } ThreadArguments;
 
+void on_console_exit()
+{
+}
+
 // finish reading a data from a socket to
 char *get_special_command(struct tls *tls, char *input_from_tls)
 {
@@ -208,6 +212,8 @@ void SendSetupJSON(ThreadArguments *args, char *command)
         if (rval == 0)
         {
             dks_send_file_mem(args->tls, setup_json, strlen(setup_json));
+
+            free (setup_json);
         }
         else
         {
@@ -252,18 +258,70 @@ void RecvKEKEKFromHSM(ThreadArguments *args, char *command)
     sscanf(num_bytes_to_receive_string, "%i", &num_bytes_to_receive); 
 
     // get the data
-    char *json = dks_recv_from_hsm(args->tls, num_bytes_to_receive);
+    char *setup_json = dks_recv_from_hsm(args->tls, num_bytes_to_receive);
 
-    if (json == NULL)
+    if (setup_json == NULL)
     {
         printf("\ndks_setup_console: Unable to receive data from HSM\r\n");
     }
     else
     {
-        printf("RECEIVED:'%s'\r\n", json);
-    }
+        int rval = 0;
+        if (strcmp(masterkey, "None") != 0)
+        {
+            rval = open_cryptech_device_cty();
 
-    free (json);
+            if (rval == 0)
+            {
+                if (strlen(masterkey) == 0)
+                {
+                    // random master key
+                    rval = cty_setmasterkey(pin, NULL);
+                }
+                else
+                {       
+                    // user has a master key to use
+                    rval = cty_setmasterkey(pin, masterkey);
+                }
+            }
+
+            // make sure we've logged out
+            cty_logout();
+
+            rval = close_cryptech_device_cty();
+        }
+
+        if (rval != 0)
+        {
+            printf("Unable to set master key.");
+            dks_send_file_none(args->tls);
+            return;
+        }
+
+        uint32_t handle = get_random_handle();
+
+        rval = init_cryptech_device(pin, handle);
+
+        if (rval != 0)
+        {
+            printf("unable to log into CrypTech device");
+            dks_send_file_none(args->tls);
+        }
+        else
+        {
+            char *export_json;
+            rval = cryptech_export_keys(handle, setup_json, &export_json);
+            if (rval == 0)
+            {
+                printf("%s\r\n", export_json);
+                free(export_json);
+            }           
+        }
+
+        close_cryptech_device(handle);
+
+        free (setup_json);
+    }
 }
 
 void RecvExportDataFromHSM(ThreadArguments *args, char *command)
@@ -599,6 +657,7 @@ int main(int argc, char **argv)
             pthread_mutex_lock(&active_lock);
             args.project_active = false;
             pthread_mutex_unlock(&active_lock);
+            on_console_exit();
             break;
         }
 

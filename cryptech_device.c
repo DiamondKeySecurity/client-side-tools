@@ -34,6 +34,10 @@
         }                                                       \
     } while (0)
 
+#define dks_json_throw(a) { rval = a; goto finished; }
+
+#define dks_json_check(a) { result = (a); if (result != DJSON_OK) dks_json_throw(HAL_ERROR_BAD_ARGUMENTS); }
+
 static const unsigned char const_0x010001[] = { 0x01, 0x00, 0x01 };
 
 // Internal Functions --------------------------------------------------
@@ -89,6 +93,51 @@ uint32_t get_random_handle()
     }
 
     return handle;
+}
+
+int cryptech_export_keys(uint32_t handle, char *setup_json, char **export_json)
+{
+    if (export_json == NULL || setup_json == NULL) return HAL_ERROR_BAD_ARGUMENTS;
+
+    *export_json = NULL;
+
+    hal_client_handle_t client = {handle};
+    hal_session_handle_t session = {0};
+
+    diamond_json_ptr_t json_ptr;
+    diamond_json_error_t result = DJSON_OK;
+    diamond_json_node_t pool[8];
+    int rval = HAL_OK;
+
+    dks_json_check(djson_start_parser(setup_json, &json_ptr, pool, sizeof(pool)/sizeof(diamond_json_node_t)));
+
+    // get the KEKEK
+    dks_json_check(djson_parse_until(&json_ptr, "kekek_pubkey", DJSON_TYPE_Array));
+
+    hal_pkey_handle_t kekek;
+    hal_uuid_t kekek_uuid;
+    char *kekek_data = NULL;
+    int kekek_len;
+    dks_json_check(djson_ext_join_decodeb64string(&json_ptr, &kekek_data, &kekek_len));
+
+    check(hal_rpc_pkey_load(client,
+                            session,
+                            &kekek,
+                            &kekek_uuid,
+                            kekek_data, kekek_len,
+                            HAL_KEY_FLAG_USAGE_KEYENCIPHERMENT));
+
+    char temp_buffer[40];
+    printf("Loaded KEYENCIPHERMENT as %s", uuid_to_string(kekek_uuid, temp_buffer));
+
+finished:
+    if(kekek_data != NULL)
+    {
+        check(hal_rpc_pkey_delete(kekek));
+        free(kekek_data);
+    }
+
+    return HAL_ERROR_NOT_IMPLEMENTED;
 }
 
 int setup_backup_destination(uint32_t handle, int device_index, char **json_result)
@@ -227,10 +276,6 @@ int setup_backup_destination(uint32_t handle, int device_index, char **json_resu
 
     return 0;
 }
-
-#define dks_json_throw(a) { rval = a; goto finished; }
-
-#define dks_json_check(a) { result = (a); if (result != DJSON_OK) dks_json_throw(HAL_ERROR_BAD_ARGUMENTS); }
 
 int import_keys(uint32_t handle, char *json_string)
 {
