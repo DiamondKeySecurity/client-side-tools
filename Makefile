@@ -44,28 +44,30 @@ LIBB64_SRC := libs/base64.c
 
 LIBS	:= ${LIBHAL_BLD}/libhal.a ${LIBDKS_BUILD}/libdks.a ${LIBTFM_BLD}/libtfm.a
 
+FLAGS := -g
+
 all : bin/dks_setup_console
 
 bin/dks_setup_console : dks_setup_console.o cryptech_device.o serial.o cryptech_device_cty.o base64.o djson.o ${LIBS}
 	gcc dks_setup_console.o cryptech_device.o serial.o cryptech_device_cty.o base64.o djson.o ${LIBS} ${LIBRESSL_LIBS} -lpthread  -o bin/dks_setup_console
 
 dks_setup_console.o : dks_setup_console.c
-	gcc -I${LIBERSSL_INCLUDE} -I${LIBDKS_SRC} -O -c dks_setup_console.c
+	gcc $(FLAGS) -I${LIBERSSL_INCLUDE} -I${LIBDKS_SRC} -O -c dks_setup_console.c
 
 cryptech_device.o : cryptech_device.c cryptech_device.h
-	gcc -I${LIBHAL_SRC} -I${LIBJSMN_SRC} -I${LIBB64_SRC} -O -c cryptech_device.c
+	gcc $(FLAGS) -I${LIBHAL_SRC} -I${LIBJSMN_SRC} -I${LIBB64_SRC} -O -c cryptech_device.c
 
 cryptech_device_cty.o : cryptech_device_cty.c cryptech_device_cty.h
-	gcc -I${LIBHAL_SRC} -O -c cryptech_device_cty.c
+	gcc $(FLAGS) -I${LIBHAL_SRC} -O -c cryptech_device_cty.c
 
 base64.o : ${LIBB64_SRC}/base64.c ${LIBB64_SRC}/base64.h
-	gcc -O -c ${LIBB64_SRC}/base64.c
+	gcc $(FLAGS) -O -c ${LIBB64_SRC}/base64.c
 
 djson.o : ${LIBDJSON_SRC}/djson.c ${LIBDJSON_SRC}/djson.h
-	gcc -O -c ${LIBDJSON_SRC}/djson.c
+	gcc $(FLAGS) -O -c ${LIBDJSON_SRC}/djson.c
 
 serial.o : serial.c serial.h
-	gcc -I${LIBHAL_SRC} -O -c serial.c
+	gcc $(FLAGS) -I${LIBHAL_SRC} -O -c serial.c
 
 ${LIBDKS_BUILD}/libdks.a: .FORCE
 	${MAKE} -C ${LIBDKS_BUILD}

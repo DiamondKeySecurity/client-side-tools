@@ -226,7 +226,6 @@ void RecvKEKEKFromHSM(ThreadArguments *args, char *command)
     // skip command code and ':RECV:{'
     char *masterkey = &command[11];
     char *pin;
-    char *device_index;
     char *num_bytes_to_receive_string;
 
     char *ptr = masterkey;
@@ -242,22 +241,12 @@ void RecvKEKEKFromHSM(ThreadArguments *args, char *command)
     while (*ptr != '}') ptr++;
     *ptr = 0;
 
-    // get the beginning of the device_index
-    device_index = ptr + 2;    
-
-    // find the end of the device_index option
-    while (*ptr != '}') ptr++;
-    *ptr = 0;
-
     // get the beginning of the num_bytes_to_receive
     num_bytes_to_receive_string = ptr + 2;    
 
     // find the end of the num_bytes_to_receive option
     while (*ptr != '}') ptr++;
     *ptr = 0;
-
-    int device;
-    sscanf(device_index, "%i", &device); 
 
     int num_bytes_to_receive;
     sscanf(num_bytes_to_receive_string, "%i", &num_bytes_to_receive); 
@@ -273,6 +262,8 @@ void RecvKEKEKFromHSM(ThreadArguments *args, char *command)
     {
         printf("RECEIVED:'%s'\r\n", json);
     }
+
+    free (json);
 }
 
 void RecvExportDataFromHSM(ThreadArguments *args, char *command)
@@ -333,6 +324,7 @@ void RecvExportDataFromHSM(ThreadArguments *args, char *command)
 
         close_cryptech_device(handle);
     }
+    free (json);
 }
 
 void handle_special_command(ThreadArguments *args, char *command)
