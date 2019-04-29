@@ -25,6 +25,7 @@
 #include <stdbool.h>
 #include <poll.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 
 #include <tls.h>
 
@@ -36,6 +37,7 @@
 
 pthread_mutex_t active_lock;
 pthread_mutex_t write_lock;
+FILE *gfp_temp_file;
 
 // Define data type that will be passed to thread
 typedef struct __ThreadArguments {
@@ -45,10 +47,6 @@ typedef struct __ThreadArguments {
     bool project_active;
     bool can_write;
 } ThreadArguments;
-
-void on_console_exit()
-{
-}
 
 // finish reading a data from a socket to
 char *get_special_command(struct tls *tls, char *input_from_tls)
@@ -236,6 +234,13 @@ void RecvKEKEKFromHSM(ThreadArguments *args, char *command)
 
     char *ptr = masterkey;
 
+    // free any temporary files
+    if(gfp_temp_file != NULL)
+    {
+        fclose(gfp_temp_file);
+        gfp_temp_file = NULL;
+    }
+
     // find the end of the master key option
     while (*ptr != '}') ptr++;
     *ptr = 0;
@@ -309,17 +314,17 @@ void RecvKEKEKFromHSM(ThreadArguments *args, char *command)
         }
         else
         {
-            char *export_json;
+            FILE *export_json;
             rval = cryptech_export_keys(handle, setup_json, &export_json);
             if (rval == 0)
             {
-                printf("%s\r\n", export_json);
-                free(export_json);
+                // keep export data in a temporary file that we can access when the
+                // HSM ask for it
+                gfp_temp_file = export_json;
             }           
         }
 
         close_cryptech_device(handle);
-
         free (setup_json);
     }
 }
@@ -385,6 +390,23 @@ void RecvExportDataFromHSM(ThreadArguments *args, char *command)
     free (json);
 }
 
+void SendExportData(ThreadArguments *args, char *command)
+{
+    if (gfp_temp_file == NULL)
+    {
+        printf("Export data not found.\r\n");
+        dks_send_file_none(args->tls);
+    }
+    else
+    {
+        printf("Sending data to HSM.\r\n");
+        dks_send_file_fp(args->tls, gfp_temp_file);
+    }
+
+    fclose(gfp_temp_file);
+    gfp_temp_file = NULL;
+}
+
 void handle_special_command(ThreadArguments *args, char *command)
 {
     // make sure nothing else gets sent during our transfer
@@ -402,7 +424,7 @@ void handle_special_command(ThreadArguments *args, char *command)
     {
         SendHSMUpdate(args, command);
     }
-    else if (code == MGMTCODE_RECIEVE_RMT_KEKEK)
+    else if (code == MGMTCODE_RECEIVE_RMT_KEKEK)
     {
         SendSetupJSON(args, command);
     }
@@ -413,6 +435,10 @@ void handle_special_command(ThreadArguments *args, char *command)
     else if (code == MGMTCODE_SEND_EXPORT_DATA)
     {
         RecvExportDataFromHSM(args, command);
+    }
+    else if (code == MGMTCODE_RECEIVE_IMPORT_DATA)
+    {
+        SendExportData(args, command);
     }
 
     // allow other things during transfer
@@ -570,6 +596,8 @@ int main(int argc, char **argv)
 
     hsm_info_t *hsm_info = NULL;
 
+    gfp_temp_file = NULL;
+
     if (pthread_mutex_init(&active_lock, NULL) != 0) 
     { 
         printf("Unable to create mutex lock.\n"); 
@@ -657,7 +685,6 @@ int main(int argc, char **argv)
             pthread_mutex_lock(&active_lock);
             args.project_active = false;
             pthread_mutex_unlock(&active_lock);
-            on_console_exit();
             break;
         }
 

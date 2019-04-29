@@ -95,12 +95,25 @@ uint32_t get_random_handle()
     return handle;
 }
 
-int cryptech_export_keys(uint32_t handle, char *setup_json, char **export_json)
+int cryptech_export_keys(uint32_t handle, char *setup_json, FILE **export_json)
 {
     if (export_json == NULL || setup_json == NULL) return HAL_ERROR_BAD_ARGUMENTS;
 
     *export_json = NULL;
 
+    FILE *fp;
+    fp = tmpfile();
+    if(fp == NULL)
+    {
+        printf("\r\nUnable to create tmp file.\r\n");
+        return HAL_ERROR_ALLOCATION_FAILURE;
+    }
+
+    // copy KEKEK info to export_json
+    char *s = setup_json;
+    while (*s != '}' && *s != 0) fputc(*s++, fp);
+
+    // add key data
     hal_client_handle_t client = {handle};
     hal_session_handle_t session = {0};
 
@@ -108,6 +121,9 @@ int cryptech_export_keys(uint32_t handle, char *setup_json, char **export_json)
     diamond_json_error_t result = DJSON_OK;
     diamond_json_node_t pool[8];
     int rval = HAL_OK;
+
+    const int MAX_UUIDS = 64;
+    hal_uuid_t uuids[MAX_UUIDS];
 
     dks_json_check(djson_start_parser(setup_json, &json_ptr, pool, sizeof(pool)/sizeof(diamond_json_node_t)));
 
@@ -130,14 +146,65 @@ int cryptech_export_keys(uint32_t handle, char *setup_json, char **export_json)
     char temp_buffer[40];
     printf("Loaded KEYENCIPHERMENT as %s", uuid_to_string(kekek_uuid, temp_buffer));
 
+    hal_uuid_t previous_uuid;
+    memset(&previous_uuid, 0, sizeof(previous_uuid));
+
+    unsigned n = 0, state = 0, first = 1;
+
+    fputs(",\"keys\": [ ", fp);
+
+    // loop through all keys on the device
+    do
+    {
+        // First try to find an exisiting KEKEK on the device
+        check(hal_rpc_pkey_match(client,
+                                 session,
+                                 HAL_KEY_TYPE_NONE,
+                                 HAL_CURVE_NONE,
+                                 HAL_KEY_FLAG_EXPORTABLE,
+                                 HAL_KEY_FLAG_EXPORTABLE,
+                                 NULL, // const hal_pkey_attribute_t *attributes,
+                                 0,    // const unsigned attributes_len,
+                                 &state,
+                                 uuids,
+                                 &n,
+                                 MAX_UUIDS,
+                                 &previous_uuid));
+
+        for (int i = 0; i < n; ++i)
+        {
+            // start the object
+            if (first) { fputs("{ ", fp); first = 0; }
+            else { fputs(", { ", fp); }
+
+            // write the data
+            char uuid_buffer[64];
+            char uuid_sub_buffer[40];
+
+            snprintf(uuid_buffer, 64, " \"uuid\": \"%s\"", uuid_to_string(uuids[i], uuid_sub_buffer));
+            fputs(uuid_buffer, fp);
+            
+            // close
+            fputc('}', fp);
+        }
+
+        // save the last uuid for more searches
+        memcpy(&previous_uuid, &uuids[n-1], sizeof(hal_uuid_t));
+    } while (n == MAX_UUIDS);
+    
+    // finish the json
+    fputs("] }", fp);
+
 finished:
     if(kekek_data != NULL)
     {
         check(hal_rpc_pkey_delete(kekek));
         free(kekek_data);
     }
+    if (rval != HAL_OK) fclose(fp);
+    else *export_json = fp;
 
-    return HAL_ERROR_NOT_IMPLEMENTED;
+    return rval;
 }
 
 int setup_backup_destination(uint32_t handle, int device_index, char **json_result)
