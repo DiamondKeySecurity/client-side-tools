@@ -24,6 +24,17 @@
 #include "libs/base64.c/base64.h"
 #include "libs/djson/djson.h"
 
+#define CK_PTR                                          *
+#define CK_DEFINE_FUNCTION(returnType, name)            returnType name
+#define CK_DECLARE_FUNCTION(returnType, name)           returnType name
+#define CK_DECLARE_FUNCTION_POINTER(returnType, name)   returnType (* name)
+#define CK_CALLBACK_FUNCTION(returnType, name)          returnType (* name)
+#ifndef NULL_PTR
+#define NULL_PTR                                        NULL
+#endif
+
+#include "pkcs11t.h"
+
 // check(op) - Copyright (c) 2016, NORDUnet A/S
 #define check(op)                                               \
     do {                                                        \
@@ -42,6 +53,7 @@ static const unsigned char const_0x010001[] = { 0x01, 0x00, 0x01 };
 
 // Internal Functions --------------------------------------------------
 char *create_setup_json_string(hal_uuid_t kekek_uuid, uint8_t *kekek_public_key, unsigned int pub_key_len, int device_index);
+hal_error_t add_cached_attributes_to_json(const hal_pkey_handle_t pkey, FILE *fp);
 char *uuid_to_string(hal_uuid_t uuid, char *buffer);
 hal_uuid_t string_to_uuid(char *name);
 
@@ -254,7 +266,11 @@ int cryptech_export_keys(uint32_t handle, char *setup_json, FILE **export_json)
 
                 free(spki_splitb64);
             }
-            
+
+            fputs(", \"attributes\": { ", fp);
+            check(add_cached_attributes_to_json(pkey, fp));
+            fputs(" }", fp);
+
             // close
             fputc('}', fp);
 
@@ -807,6 +823,62 @@ char *create_setup_json_string(hal_uuid_t kekek_uuid, uint8_t *kekek_public_key,
     free(public_key_string);
 
     return json_result;
+}
+
+hal_error_t add_cached_attributes_to_json(const hal_pkey_handle_t pkey, FILE *fp)
+{
+    const uint32_t cached_attributes[] = { CKA_WRAP_TEMPLATE, CKA_UNWRAP_TEMPLATE, CKA_DERIVE_TEMPLATE,
+                                           CKA_HW_FEATURE_TYPE, CKA_RESET_ON_INIT, CKA_HAS_RESET,
+                                           CKA_PIXEL_X, CKA_PIXEL_Y, CKA_RESOLUTION, CKA_CHAR_ROWS,
+                                           CKA_CHAR_COLUMNS, CKA_COLOR, CKA_BITS_PER_PIXEL, CKA_CHAR_SETS,
+                                           CKA_ENCODING_METHODS, CKA_MIME_TYPES, CKA_MECHANISM_TYPE,
+                                           CKA_REQUIRED_CMS_ATTRIBUTES, CKA_DEFAULT_CMS_ATTRIBUTES,
+                                           CKA_SUPPORTED_CMS_ATTRIBUTES, CKA_ALLOWED_MECHANISMS,
+                                           CKA_PRIVATE_EXPONENT, CKA_PRIME_1, CKA_PRIME_2, CKA_EXPONENT_1,
+                                           CKA_EXPONENT_2, CKA_COEFFICIENT, CKA_PRIME, CKA_SUBPRIME,
+                                           CKA_BASE, CKA_PRIME_BITS, CKA_SUBPRIME_BITS, CKA_VALUE_BITS,
+                                           CKA_VALUE_LEN};
+
+    
+    const int num_cached_attributes = sizeof(cached_attributes) /  sizeof(unsigned int);
+    const size_t attributes_buffer_len = 1024*16; // overkill
+    unsigned char attributes_buffer[attributes_buffer_len];
+
+    int first = 1;
+
+    for (int i = 0; i < num_cached_attributes; ++i)
+    {
+        hal_pkey_attribute_t attr_get = { .type = cached_attributes[i] };
+
+        if (hal_rpc_pkey_get_attributes(pkey,
+                                        &attr_get,
+                                        1,
+                                        attributes_buffer,
+                                        attributes_buffer_len) == HAL_OK)
+        {
+            char buffer[64];
+
+            if (first == 1) { fputc(',', fp); first == 0; }
+
+            if(attr_get.length == 1)
+            {
+                unsigned char *value = (unsigned char *)attr_get.value;
+                snprintf(buffer, 63, "\"%i\":%i", i, (int)(*value));
+            }
+            else if (attr_get.length > 1)
+            {
+                snprintf(buffer, 63, "\"%i\":[\"\"]", i);
+            }
+
+            fputs(buffer, fp);
+        }
+        else
+        {
+            printf("failed\r\n");
+        }
+        
+    }
+    return HAL_OK;
 }
 
 char *binary_to_split_b64(uint8_t *binary_data, size_t binary_data_len)

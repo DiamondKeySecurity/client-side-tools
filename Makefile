@@ -42,6 +42,8 @@ LIBTFM_BLD	?= ${LIBS_DIR}/libtfm
 LIBDJSON_SRC := libs/djson
 LIBB64_SRC := libs/base64.c
 
+PKCS11_SRC := ${DKS_ROOT}/sw/pkcs11
+
 LIBS	:= ${LIBHAL_BLD}/libhal.a ${LIBDKS_BUILD}/libdks.a ${LIBTFM_BLD}/libtfm.a
 
 FLAGS := -g
@@ -55,7 +57,7 @@ dks_setup_console.o : dks_setup_console.c
 	gcc $(FLAGS) -I${LIBERSSL_INCLUDE} -I${LIBDKS_SRC} -O -c dks_setup_console.c
 
 cryptech_device.o : cryptech_device.c cryptech_device.h
-	gcc $(FLAGS) -I${LIBHAL_SRC} -I${LIBJSMN_SRC} -I${LIBB64_SRC} -O -c cryptech_device.c
+	gcc $(FLAGS) -I${LIBHAL_SRC} -I${LIBJSMN_SRC} -I${LIBB64_SRC} -I$(PKCS11_SRC) -O -c cryptech_device.c
 
 cryptech_device_cty.o : cryptech_device_cty.c cryptech_device_cty.h
 	gcc $(FLAGS) -I${LIBHAL_SRC} -O -c cryptech_device_cty.c
