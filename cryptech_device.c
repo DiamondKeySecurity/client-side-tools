@@ -45,6 +45,7 @@ char *create_setup_json_string(hal_uuid_t kekek_uuid, uint8_t *kekek_public_key,
 char *uuid_to_string(hal_uuid_t uuid, char *buffer);
 hal_uuid_t string_to_uuid(char *name);
 
+char *binary_to_split_b64(uint8_t *binary_data, size_t binary_data_len);
 char *split_b64_string(const char *b64data);
 diamond_json_error_t djson_ext_join_decodeb64string(diamond_json_ptr_t *json_ptr, char **decoded_result, unsigned int *result_len);
 
@@ -125,6 +126,15 @@ int cryptech_export_keys(uint32_t handle, char *setup_json, FILE **export_json)
     const int MAX_UUIDS = 64;
     hal_uuid_t uuids[MAX_UUIDS];
 
+    const size_t der_max = 1024 * 8;   // overkill
+    const size_t pkcs8_max = 1024 * 8; // overkill
+    const size_t kek_max = 512 * 8;
+
+    char pkcs8[pkcs8_max];
+    char kek[kek_max];
+    char der[der_max];
+
+
     dks_json_check(djson_start_parser(setup_json, &json_ptr, pool, sizeof(pool)/sizeof(diamond_json_node_t)));
 
     // get the KEKEK
@@ -180,12 +190,75 @@ int cryptech_export_keys(uint32_t handle, char *setup_json, FILE **export_json)
             // write the data
             char uuid_buffer[64];
             char uuid_sub_buffer[40];
+            char flags_buffer[32];
 
-            snprintf(uuid_buffer, 64, " \"uuid\": \"%s\"", uuid_to_string(uuids[i], uuid_sub_buffer));
-            fputs(uuid_buffer, fp);
+            hal_pkey_handle_t pkey;
+            hal_key_type_t pkey_type;
+            hal_key_flags_t pkey_flags;
+
+            check(hal_rpc_pkey_open(client,
+                                    session,
+                                    &pkey,
+                                    &uuids[i]));
+
+            check(hal_rpc_pkey_get_key_type(pkey, &pkey_type));
+            check(hal_rpc_pkey_get_key_flags(pkey, &pkey_flags));
+
+            snprintf(uuid_buffer, 64, ",\"uuid\": \"%s\" ", uuid_to_string(uuids[i], uuid_sub_buffer));
+            snprintf(flags_buffer, 32, ",\"flags\": \"%u\" ", pkey_flags);
+
+            if (pkey_type == HAL_KEY_TYPE_RSA_PRIVATE || pkey_type == HAL_KEY_TYPE_EC_PRIVATE)
+            {
+                fputs("\"comment\": \"Encrypted private key\" ", fp);
+
+                size_t pkcs8_len, kek_len;
+
+                check(hal_rpc_pkey_export(pkey,
+                                          kekek,
+                                          pkcs8, &pkcs8_len, pkcs8_max,
+                                          kek,   &kek_len,   kek_max));
+
+                char *pkcs8_splitb64 = binary_to_split_b64(pkcs8, pkcs8_len);
+                char *kek_splitb64 = binary_to_split_b64(kek, kek_len);
+
+                fputs(", \"pkcs8\": [ ", fp);
+                fputs(pkcs8_splitb64, fp);
+                fputs(" ]", fp);
+
+                fputs(", \"kek\": [ ", fp);
+                fputs(kek_splitb64, fp);
+                fputs(" ]", fp);
+
+                fputs(uuid_buffer, fp);
+                fputs(flags_buffer, fp);
+
+                free(pkcs8_splitb64);
+                free(kek_splitb64);
+            }
+            else if (pkey_type == HAL_KEY_TYPE_RSA_PUBLIC || pkey_type == HAL_KEY_TYPE_EC_PUBLIC)
+            {
+                fputs("\"comment\": \"Public key\" ", fp);
+
+                size_t der_len;
+                check(hal_rpc_pkey_get_public_key(pkey,
+                                                  der, &der_len, der_max));
+
+                char *spki_splitb64 = binary_to_split_b64(der, der_len);
+
+                fputs(", \"spki\": [ ", fp);
+                fputs(spki_splitb64, fp);
+                fputs(" ]", fp);
+
+                fputs(uuid_buffer, fp);
+                fputs(flags_buffer, fp);
+
+                free(spki_splitb64);
+            }
             
             // close
             fputc('}', fp);
+
+            check(hal_rpc_pkey_close(pkey));
         }
 
         // save the last uuid for more searches
@@ -639,6 +712,7 @@ char *split_b64_string(const char *b64data)
             index = strlen(splitbuffer);
         }
         splitbuffer[index++] = b64data[i];
+        splitbuffer[index] = 0;
         count = (count + 1) % 76;
     }
     strcat(splitbuffer, "\"");
@@ -733,4 +807,23 @@ char *create_setup_json_string(hal_uuid_t kekek_uuid, uint8_t *kekek_public_key,
     free(public_key_string);
 
     return json_result;
+}
+
+char *binary_to_split_b64(uint8_t *binary_data, size_t binary_data_len)
+{
+    unsigned int b64size = b64e_size(binary_data_len)+1;
+
+    // make sure the allocation was successful
+    unsigned char *b64data = malloc(b64size);
+    if(b64data == NULL) return NULL;
+
+    // encode the public key
+    unsigned int num_bytes = b64_encode((const unsigned char *)binary_data, binary_data_len, b64data);
+
+    // split b64 like the way CrypTech does it in Python
+    char *splitb64 = split_b64_string(b64data);
+    
+    free(b64data);
+
+    return splitb64;
 }
