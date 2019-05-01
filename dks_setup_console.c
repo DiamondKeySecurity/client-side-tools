@@ -199,7 +199,8 @@ void SendSetupJSON(ThreadArguments *args, char *command)
 
     if (rval != 0)
     {
-        printf("unable to log into CrypTech device");
+        printf("Unable to log into CrypTech device.\r\n");
+        printf("Did you run 'eval $(cryptech_probe)' before running this command?\r\n");
         dks_send_file_none(args->tls);
     }
     else
@@ -218,10 +219,9 @@ void SendSetupJSON(ThreadArguments *args, char *command)
             printf("Unable to get KEKEK.\r\nPlease check that the master key is correct.\r\n");
             dks_send_file_none(args->tls);
         }
-        
-    }
 
-    close_cryptech_device(handle);
+        close_cryptech_device(handle);   
+    }
 }
 
 void RecvKEKEKFromHSM(ThreadArguments *args, char *command)
@@ -309,7 +309,8 @@ void RecvKEKEKFromHSM(ThreadArguments *args, char *command)
 
         if (rval != 0)
         {
-            printf("unable to log into CrypTech device");
+            printf("Unable to log into CrypTech device.\r\n");
+            printf("Did you run 'eval $(cryptech_probe)' before running this command?\r\n");
             dks_send_file_none(args->tls);
         }
         else
@@ -322,9 +323,10 @@ void RecvKEKEKFromHSM(ThreadArguments *args, char *command)
                 // HSM ask for it
                 gfp_temp_file = export_json;
             }           
+
+            close_cryptech_device(handle);
         }
 
-        close_cryptech_device(handle);
         free (setup_json);
     }
 }
@@ -367,7 +369,8 @@ void RecvExportDataFromHSM(ThreadArguments *args, char *command)
 
         if (rval != 0)
         {
-            printf("unable to log into CrypTech device");
+            printf("Unable to log into CrypTech device.\r\n");
+            printf("Did you run 'eval $(cryptech_probe)' before running this command?\r\n");
             dks_send_file_none(args->tls);
         }
         else
@@ -383,9 +386,9 @@ void RecvExportDataFromHSM(ThreadArguments *args, char *command)
             {
                 printf("Unable to save export data to CrypTech device.\r\n");
             }
-        }
 
-        close_cryptech_device(handle);
+            close_cryptech_device(handle);
+        }
     }
     free (json);
 }
@@ -401,10 +404,10 @@ void SendExportData(ThreadArguments *args, char *command)
     {
         printf("Sending data to HSM.\r\n");
         dks_send_file_fp(args->tls, gfp_temp_file);
-    }
 
-    fclose(gfp_temp_file);
-    gfp_temp_file = NULL;
+        fclose(gfp_temp_file);
+        gfp_temp_file = NULL;
+    }
 }
 
 void handle_special_command(ThreadArguments *args, char *command)

@@ -1,15 +1,15 @@
 // Copyright (c) 2019  Diamond Key Security, NFP
-// 
+//
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
 // as published by the Free Software Foundation; version 2
 // of the License only.
-// 
+//
 // This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
-// 
+//
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, If not, see <https://www.gnu.org/licenses/>.
 //
@@ -20,6 +20,8 @@
 #include <time.h> 
 
 #include <hal.h>
+#include <hal_internal.h>
+#include <slip_internal.h>
 
 #include "libs/base64.c/base64.h"
 #include "libs/djson/djson.h"
@@ -57,9 +59,10 @@ hal_error_t add_cached_attributes_to_json(const hal_pkey_handle_t pkey, FILE *fp
 char *uuid_to_string(hal_uuid_t uuid, char *buffer);
 hal_uuid_t string_to_uuid(char *name);
 
-char *binary_to_split_b64(uint8_t *binary_data, size_t binary_data_len);
+char *binary_to_split_b64(const uint8_t *binary_data, size_t binary_data_len);
 char *split_b64_string(const char *b64data);
 diamond_json_error_t djson_ext_join_decodeb64string(diamond_json_ptr_t *json_ptr, char **decoded_result, unsigned int *result_len);
+hal_error_t dks_hal_rpc_client_transport_init(void);
 
 // Function Implementations --------------------------------------------
 int init_cryptech_device(char *pin, uint32_t handle)
@@ -67,7 +70,7 @@ int init_cryptech_device(char *pin, uint32_t handle)
     hal_client_handle_t client = {handle};
     hal_user_t user = HAL_USER_WHEEL;
 
-    check(hal_rpc_client_init());
+    check(dks_hal_rpc_client_transport_init());
 
     check(hal_rpc_login(client, user, pin, strlen(pin)));
     check(hal_rpc_is_logged_in(client, user));
@@ -166,7 +169,7 @@ int cryptech_export_keys(uint32_t handle, char *setup_json, FILE **export_json)
                             HAL_KEY_FLAG_USAGE_KEYENCIPHERMENT));
 
     char temp_buffer[40];
-    printf("Loaded KEYENCIPHERMENT as %s", uuid_to_string(kekek_uuid, temp_buffer));
+    printf("Loaded KEYENCIPHERMENT as '%s'.\r\n", uuid_to_string(kekek_uuid, temp_buffer));
 
     hal_uuid_t previous_uuid;
     memset(&previous_uuid, 0, sizeof(previous_uuid));
@@ -275,6 +278,8 @@ int cryptech_export_keys(uint32_t handle, char *setup_json, FILE **export_json)
             fputc('}', fp);
 
             check(hal_rpc_pkey_close(pkey));
+
+            printf("Key '%s' processed.\r\n", uuid_sub_buffer);
         }
 
         // save the last uuid for more searches
@@ -851,7 +856,10 @@ hal_error_t add_cached_attributes_to_json(const hal_pkey_handle_t pkey, FILE *fp
 
     
     const int num_cached_attributes = sizeof(cached_attributes) /  sizeof(unsigned int);
-    const size_t attributes_buffer_len = 1024*16; // overkill
+
+    // the buffer size is much larger than needed for most cases, but larger than 2048
+    // can cause a RPC packet overflow error
+    const size_t attributes_buffer_len = 2048;
     unsigned char attributes_buffer[attributes_buffer_len];
 
     int first = 1;
@@ -860,38 +868,36 @@ hal_error_t add_cached_attributes_to_json(const hal_pkey_handle_t pkey, FILE *fp
     {
         hal_pkey_attribute_t attr_get = { .type = cached_attributes[i] };
 
-        if (hal_rpc_pkey_get_attributes(pkey,
+        hal_error_t err;
+        if ((err = hal_rpc_pkey_get_attributes(pkey,
                                         &attr_get,
                                         1,
                                         attributes_buffer,
-                                        attributes_buffer_len) == HAL_OK)
+                                        attributes_buffer_len)) == HAL_OK)
         {
-            char buffer[64];
+            char buffer[4096]; // lazy waste of memory
 
-            if (first == 1) { fputc(',', fp); first == 0; }
+            if (!first) { fputc(',', fp);}
+            else first = 0; 
 
             if(attr_get.length == 1)
             {
                 unsigned char *value = (unsigned char *)attr_get.value;
-                snprintf(buffer, 63, "\"%i\":%i", i, (int)(*value));
+                snprintf(buffer, 63, "\"%u\":%i", attr_get.type, (int)(*value));
             }
             else if (attr_get.length > 1)
             {
-                snprintf(buffer, 63, "\"%i\":[\"\"]", i);
+                char *attr_data = binary_to_split_b64(attr_get.value, attr_get.length);
+                snprintf(buffer, 4095, "\"%u\":[%s]", attr_get.type, attr_data);
             }
 
             fputs(buffer, fp);
-        }
-        else
-        {
-            printf("failed\r\n");
-        }
-        
+        }       
     }
     return HAL_OK;
 }
 
-char *binary_to_split_b64(uint8_t *binary_data, size_t binary_data_len)
+char *binary_to_split_b64(const uint8_t *binary_data, size_t binary_data_len)
 {
     unsigned int b64size = b64e_size(binary_data_len)+1;
 
@@ -909,3 +915,54 @@ char *binary_to_split_b64(uint8_t *binary_data, size_t binary_data_len)
 
     return splitb64;
 }
+
+// --------------------------------------------------------------------------------
+// Taken from rpc_client_serial.c with modifications
+/*
+ * rpc_client_serial.c
+ * -------------------
+ * Remote procedure call transport over serial line with SLIP framing.
+ *
+ * Copyright (c) 2016, NORDUnet A/S All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are
+ * met:
+ * - Redistributions of source code must retain the above copyright notice,
+ *   this list of conditions and the following disclaimer.
+ *
+ * - Redistributions in binary form must reproduce the above copyright
+ *   notice, this list of conditions and the following disclaimer in the
+ *   documentation and/or other materials provided with the distribution.
+ *
+ * - Neither the name of the NORDUnet nor the names of its contributors may
+ *   be used to endorse or promote products derived from this software
+ *   without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+ * IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+ * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+ * PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+ * HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
+ * TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+ * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+hal_error_t dks_hal_rpc_client_transport_init(void)
+{
+    const char *device = getenv(HAL_CLIENT_SERIAL_DEVICE_ENVVAR);
+    const char *speed_ = getenv(HAL_CLIENT_SERIAL_SPEED_ENVVAR);
+    uint32_t    speed  = HAL_CLIENT_SERIAL_DEFAULT_SPEED;
+
+    if (device == NULL)
+        return HAL_ERROR_RPC_TRANSPORT;
+
+    if (speed_ != NULL)
+        speed = (uint32_t) strtoul(speed_, NULL, 10);
+
+    return hal_serial_init(device, speed);
+}
+// --------------------------------------------------------------------------------
