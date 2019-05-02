@@ -220,7 +220,7 @@ int cryptech_export_keys(uint32_t handle, char *setup_json, FILE **export_json)
             check(hal_rpc_pkey_get_key_flags(pkey, &pkey_flags));
 
             snprintf(uuid_buffer, 64, ",\"uuid\": \"%s\" ", uuid_to_string(uuids[i], uuid_sub_buffer));
-            snprintf(flags_buffer, 32, ",\"flags\": \"%u\" ", pkey_flags);
+            snprintf(flags_buffer, 32, ",\"flags\": %u ", pkey_flags);
 
             if (pkey_type == HAL_KEY_TYPE_RSA_PRIVATE || pkey_type == HAL_KEY_TYPE_EC_PRIVATE)
             {
@@ -880,16 +880,8 @@ hal_error_t add_cached_attributes_to_json(const hal_pkey_handle_t pkey, FILE *fp
             if (!first) { fputc(',', fp);}
             else first = 0; 
 
-            if(attr_get.length == 1)
-            {
-                unsigned char *value = (unsigned char *)attr_get.value;
-                snprintf(buffer, 63, "\"%u\":%i", attr_get.type, (int)(*value));
-            }
-            else if (attr_get.length > 1)
-            {
-                char *attr_data = binary_to_split_b64(attr_get.value, attr_get.length);
-                snprintf(buffer, 4095, "\"%u\":[%s]", attr_get.type, attr_data);
-            }
+            char *attr_data = binary_to_split_b64(attr_get.value, attr_get.length);
+            snprintf(buffer, 4095, "\"%u\":[%s]", attr_get.type, attr_data);
 
             fputs(buffer, fp);
         }       

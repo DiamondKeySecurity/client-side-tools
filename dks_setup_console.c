@@ -405,6 +405,16 @@ void SendExportData(ThreadArguments *args, char *command)
         printf("Sending data to HSM.\r\n");
         dks_send_file_fp(args->tls, gfp_temp_file);
 
+        fseek(gfp_temp_file, 0, SEEK_SET);
+
+        FILE *fp = fopen("/home/douglas/Documents/test.json", "wt");
+        int c;
+        while ((c = fgetc(gfp_temp_file)) != EOF)
+        {
+            fputc(c, fp);
+        }
+        fclose(fp);
+
         fclose(gfp_temp_file);
         gfp_temp_file = NULL;
     }
