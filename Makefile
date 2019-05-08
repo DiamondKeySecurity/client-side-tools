@@ -17,7 +17,7 @@
 #
 DKS_ROOT := $(abspath ../..)
 
-LIBHAL_TARGET := tcpdaemon
+LIBHAL_TARGET := serial
 
 ifndef CRYPTECH_ROOT
   CRYPTECH_ROOT := ${DKS_ROOT}/CrypTech
@@ -39,21 +39,39 @@ LIBHAL_BLD	?= ${LIBS_DIR}/libhal
 LIBTFM_SRC	?= ${CRYPTECH_ROOT}/sw/thirdparty/libtfm
 LIBTFM_BLD	?= ${LIBS_DIR}/libtfm
 
+LIBB64_SRC := libs/base64.c
+
+PKCS11_SRC := ${DKS_ROOT}/sw/pkcs11
+
 LIBS	:= ${LIBHAL_BLD}/libhal.a ${LIBDKS_BUILD}/libdks.a ${LIBTFM_BLD}/libtfm.a
 
-all : bin/dks_setup_console bin/dks_keygen
+FLAGS := -g
+
+all : bin/dks_setup_console bin/dks_cryptech_backup
 
 bin/dks_setup_console : dks_setup_console.o ${LIBS}
 	gcc dks_setup_console.o ${LIBS} ${LIBRESSL_LIBS} -lpthread  -o bin/dks_setup_console
 
+bin/dks_cryptech_backup : dks_cryptech_backup.o cryptech_device.o serial.o cryptech_device_cty.o base64.o ${LIBS}
+	gcc dks_cryptech_backup.o cryptech_device.o serial.o cryptech_device_cty.o base64.o ${LIBS} -lpthread  -o bin/dks_cryptech_backup
+
 dks_setup_console.o : dks_setup_console.c
-	gcc -I${LIBERSSL_INCLUDE} -I${LIBDKS_SRC} -O -c dks_setup_console.c
+	gcc $(FLAGS) -I${LIBERSSL_INCLUDE} -I${LIBDKS_SRC} -O -c dks_setup_console.c
 
-bin/dks_keygen : dks_keygen.o ${LIBS}
-	gcc dks_keygen.o ${LIBS} ${LIBRESSL_LIBS} -lpthread  -o bin/dks_keygen
+dks_cryptech_backup.o : dks_cryptech_backup.c
+	gcc $(FLAGS) -I${LIBDKS_SRC} -O -c dks_cryptech_backup.c
 
-dks_keygen.o : dks_keygen.c
-	gcc -I${LIBERSSL_INCLUDE} -I${LIBDKS_SRC} -I${LIBHAL_SRC} -O -c dks_keygen.c
+cryptech_device.o : cryptech_device.c cryptech_device.h
+	gcc $(FLAGS) -I${LIBHAL_SRC} -I${LIBDKS_SRC} -I${LIBB64_SRC} -I$(PKCS11_SRC) -O -c cryptech_device.c
+
+cryptech_device_cty.o : cryptech_device_cty.c cryptech_device_cty.h
+	gcc $(FLAGS) -I${LIBHAL_SRC} -O -c cryptech_device_cty.c
+
+base64.o : ${LIBB64_SRC}/base64.c ${LIBB64_SRC}/base64.h
+	gcc $(FLAGS) -O -c ${LIBB64_SRC}/base64.c
+
+serial.o : serial.c serial.h
+	gcc $(FLAGS) -I${LIBHAL_SRC} -O -c serial.c
 
 ${LIBDKS_BUILD}/libdks.a: .FORCE
 	${MAKE} -C ${LIBDKS_BUILD}
@@ -67,7 +85,8 @@ ${LIBTFM_BLD}/libtfm.a: .FORCE
 clean:
 	rm -rf *.o
 	rm bin/dks_setup_console
-	rm bin/dks_keygen
-	${MAKE} -C libdks  $@
+	${MAKE} -C libs/libdks  $@
+	${MAKE} -C libs/libhal  $@
+	${MAKE} -C libs/libtfm  $@
 
 .FORCE:
