@@ -13,8 +13,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, If not, see <https://www.gnu.org/licenses/>.
 //
-// Script to import CrypTech code into DKS HSM folders.
-//
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -25,10 +23,12 @@
 #include <stdbool.h>
 #include <poll.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 
 #include <tls.h>
 
 #include <dks.h>
+#include <dks_transfer.h>
 
 pthread_mutex_t active_lock;
 pthread_mutex_t write_lock;
@@ -115,8 +115,155 @@ error_condition:
     return NULL;
 }
 
+void SendHSMUpdate(ThreadArguments *args, char *command)
+{
+    // skip command code and ':RECV:'
+    char *file_to_send = &command[10];
+
+    // send the file
+    dks_send_file(args->tls, file_to_send);
+}
+
+void SendSetupJSON(ThreadArguments *args, char *command)
+{
+    // get pin and masterkey from options
+    // skip command code and ':RECV:{'
+    char *setup_json_path = &command[11];
+
+    char *ptr = setup_json_path;
+
+    // find the end of the master key option
+    while (*ptr != '}') ptr++;
+    *ptr = 0;
+
+
+    dks_send_file(args->tls, setup_json_path);
+}
+
+void RecvKEKEKFromHSM(ThreadArguments *args, char *command)
+{
+    // get pin and masterkey from options
+    // skip command code and ':RECV:{'
+    char *setup_json_path = &command[11];
+    char *num_bytes_to_receive_string;
+
+    char *ptr = setup_json_path;
+
+    // find the end of the master key option
+    while (*ptr != '}') ptr++;
+    *ptr = 0;
+
+    // get the beginning of the num_bytes_to_receive
+    num_bytes_to_receive_string = ptr + 2;    
+
+    // find the end of the num_bytes_to_receive option
+    while (*ptr != '}') ptr++;
+    *ptr = 0;
+
+    int num_bytes_to_receive;
+    sscanf(num_bytes_to_receive_string, "%i", &num_bytes_to_receive); 
+
+    // get the data
+    char *setup_json = dks_recv_from_hsm(args->tls, num_bytes_to_receive);
+
+    if (setup_json == NULL)
+    {
+        printf("\ndks_setup_console: Unable to receive data from HSM\r\n");
+    }
+    else
+    {
+        FILE *fp = fopen(setup_json_path, "wt");
+        if (fp == NULL)
+        {
+            printf("\r\nUnable to create '%s.'\r\n", setup_json_path);
+        }
+        else
+        {
+            char *s = setup_json;
+            while (*s != 0)
+            {
+                fputc(*s++, fp);
+            }
+            fclose(fp);
+        }
+        
+        free (setup_json);
+    }
+}
+
+void RecvExportDataFromHSM(ThreadArguments *args, char *command)
+{
+    // get pin and masterkey from options
+    // skip command code and ':RECV:{'
+    char *export_json_path = &command[11];
+    char *num_bytes_to_receive_string;
+
+    char *ptr = export_json_path;
+
+    // find the end of the pin key option
+    while (*ptr != '}') ptr++;
+    *ptr = 0;
+
+    // get the beginning of the num_bytes_to_receive
+    num_bytes_to_receive_string = ptr + 2;
+
+    // find the end of the num_bytes_to_receive option
+    while (*ptr != '}') ptr++;
+    *ptr = 0;
+
+    int num_bytes_to_receive;
+    sscanf(num_bytes_to_receive_string, "%i", &num_bytes_to_receive); 
+
+    // get the data
+    char *json = dks_recv_from_hsm(args->tls, num_bytes_to_receive);
+
+    if (json == NULL)
+    {
+        printf("\ndks_setup_console: Unable to receive data from HSM\r\n");
+    }
+    else
+    {
+        // save the received data
+        FILE *fp = fopen(export_json_path, "wt");
+        if (fp == NULL)
+        {
+            printf("Unable to create the file '%s.'", export_json_path);
+        }
+        else
+        {
+            char *s = json;
+            while (*s != 0)
+            {
+                fputc(*s++, fp);
+            }
+            fclose(fp);
+        }
+    }
+    free (json);
+}
+
+void SendExportData(ThreadArguments *args, char *command)
+{
+    // get pin and masterkey from options
+    // skip command code and ':RECV:{'
+    char *export_json_path = &command[11];
+
+    char *ptr = export_json_path;
+
+    // find the end of the master key option
+    while (*ptr != '}') ptr++;
+    *ptr = 0;
+
+    dks_send_file(args->tls, export_json_path);
+}
+
 void handle_special_command(ThreadArguments *args, char *command)
 {
+    // make sure nothing else gets sent during our transfer
+    pthread_mutex_lock(&write_lock);
+    args->can_write = false;
+    pthread_mutex_unlock(&write_lock);
+
     // get the code
     int code = (command[0] << 24) + 
                (command[1] << 16) + 
@@ -125,69 +272,29 @@ void handle_special_command(ThreadArguments *args, char *command)
 
     if (code == MGMTCODE_RECEIVEHSM_UPDATE)
     {
-        char buffer[1024];
-
-        // make sure nothing else gets sent during our transfer
-        pthread_mutex_lock(&write_lock);
-        args->can_write = false;
-        pthread_mutex_unlock(&write_lock);
-
-        // skip command code and ':RECV:'
-        char *file_to_send = &command[10];
-
-        FILE *fp = fopen(file_to_send, "rb");
-
-        if(fp != NULL)
-        {
-            printf("\r\nSending file %s to HSM\r\n", file_to_send);
-
-            // get the size of the file
-            fseek(fp, 0, SEEK_END);
-            long file_len = ftell(fp);
-            fseek(fp, 0, SEEK_SET);
-
-            // send the file size
-            sprintf(buffer, "%ld\r", file_len);
-
-            tls_write(args->tls, buffer, strlen(buffer));
-
-            int remaining = file_len;
-
-            // send the file
-            int read_count;
-            do
-            {
-                read_count = 1024;
-                if(read_count > remaining) read_count = remaining;
-
-                int n = fread(buffer, read_count, 1, fp);
-
-                if(n > 0)
-                {
-                    // send to the HSM
-                    tls_write(args->tls, buffer, read_count);
-                }
-
-                remaining -= read_count;
-
-            } while (remaining > 0);
-
-            fclose(fp);
-        }
-        else
-        {
-            printf("\r\nUnable to open (%s).\r\n", file_to_send);
-
-            // send 0 which means the file wasn't found
-            sprintf(buffer, "0\r0000000");
-
-            tls_write(args->tls, buffer, strlen(buffer));            
-        }
-
-        pthread_mutex_lock(&write_lock);
-        args->can_write = true;
-        pthread_mutex_unlock(&write_lock);        
+        SendHSMUpdate(args, command);
     }
+    else if (code == MGMTCODE_RECEIVE_RMT_KEKEK)
+    {
+        SendSetupJSON(args, command);
+    }
+    else if (code == MGMTCODE_SEND_LCL_KEKEK)
+    {
+        RecvKEKEKFromHSM(args, command);
+    }
+    else if (code == MGMTCODE_SEND_EXPORT_DATA)
+    {
+        RecvExportDataFromHSM(args, command);
+    }
+    else if (code == MGMTCODE_RECEIVE_IMPORT_DATA)
+    {
+        SendExportData(args, command);
+    }
+
+    // allow other things during transfer
+    pthread_mutex_lock(&write_lock);
+    args->can_write = true;
+    pthread_mutex_unlock(&write_lock);    
 
     free(command);
 }
