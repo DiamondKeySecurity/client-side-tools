@@ -50,9 +50,11 @@ FLAGS := -g
 all : bin/dks_setup_console bin/dks_cryptech_backup
 
 bin/dks_setup_console : dks_setup_console.o ${LIBS}
+	mkdir bin
 	gcc dks_setup_console.o ${LIBS} ${LIBRESSL_LIBS} -lpthread  -o bin/dks_setup_console
 
 bin/dks_cryptech_backup : dks_cryptech_backup.o cryptech_device.o serial.o cryptech_device_cty.o base64.o ${LIBS}
+	mkdir bin
 	gcc dks_cryptech_backup.o cryptech_device.o serial.o cryptech_device_cty.o base64.o ${LIBS} -lpthread  -o bin/dks_cryptech_backup
 
 dks_setup_console.o : dks_setup_console.c
