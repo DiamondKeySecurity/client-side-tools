@@ -1,14 +1,15 @@
-ifndef CRYPTECH_ROOT
-  CRYPTECH_ROOT := $(abspath ../../../../CrypTech)
-endif
+# ifndef CRYPTECH_ROOT
+#   CRYPTECH_ROOT := $(abspath ../../../../CrypTech)
+# endif
 
-LIBHAL_SRC	?= ${CRYPTECH_ROOT}/sw/libhal
-LIBHAL_BLD	?= $(abspath ..)
+# LIBHAL_SRC	?= ${CRYPTECH_ROOT}/sw/libhal
+# LIBHAL_BLD	?= $(abspath ..)
 
-LIBTFM_SRC	?= ${CRYPTECH_ROOT}/sw/thirdparty/libtfm
-LIBTFM_BLD	?= $(abspath ../../libtfm)
+# LIBTFM_SRC	?= ${CRYPTECH_ROOT}/sw/thirdparty/libtfm
+# LIBTFM_BLD	?= $(abspath ../../libtfm)
 
-vpath %.c ${LIBHAL_SRC}/utils
-vpath %.h ${LIBHAL_SRC}/utils:${LIBTFM_BLD}
+# vpath %.c ${LIBHAL_SRC}/utils
+# vpath %.h ${LIBHAL_SRC}/utils:${LIBTFM_BLD}
 
-include ${LIBHAL_SRC}/utils/Makefile
+# include ${LIBHAL_SRC}/utils/Makefile
+all:
