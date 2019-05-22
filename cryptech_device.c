@@ -840,28 +840,32 @@ hal_error_t add_cached_attributes_to_json(const hal_pkey_handle_t pkey, FILE *fp
 {
     // what are the attributes that we want to read from the CrypTech device
     const uint32_t cached_attributes[] = { CKA_CLASS, CKA_TOKEN, CKA_PRIVATE, CKA_LABEL, CKA_APPLICATION,
-                                           CKA_VALUE, CKA_OBJECT_ID, CKA_CERTIFICATE_TYPE, CKA_ISSUER,
-                                           CKA_SERIAL_NUMBER, CKA_AC_ISSUER, CKA_OWNER, CKA_ATTR_TYPES,
+                                           CKA_VALUE, CKA_OBJECT_ID, CKA_CERTIFICATE_TYPE,
+                                           CKA_SERIAL_NUMBER, CKA_OWNER, CKA_ATTR_TYPES,
                                            CKA_TRUSTED, CKA_CERTIFICATE_CATEGORY, CKA_JAVA_MIDP_SECURITY_DOMAIN,
-                                           CKA_URL, CKA_HASH_OF_SUBJECT_PUBLIC_KEY, CKA_HASH_OF_ISSUER_PUBLIC_KEY,
                                            CKA_CHECK_VALUE, CKA_KEY_TYPE, CKA_SUBJECT, CKA_ID, CKA_SENSITIVE,
                                            CKA_ENCRYPT, CKA_DECRYPT, CKA_WRAP, CKA_UNWRAP, CKA_SIGN,
                                            CKA_SIGN_RECOVER, CKA_VERIFY, CKA_VERIFY_RECOVER, CKA_DERIVE,
-                                           CKA_START_DATE, CKA_END_DATE, CKA_MODULUS, CKA_MODULUS_BITS,
+                                           CKA_MODULUS, CKA_MODULUS_BITS,
                                            CKA_PUBLIC_EXPONENT, CKA_EXTRACTABLE, CKA_LOCAL, CKA_NEVER_EXTRACTABLE,
                                            CKA_ALWAYS_SENSITIVE, CKA_KEY_GEN_MECHANISM, CKA_MODIFIABLE,
                                            CKA_EC_PARAMS, CKA_EC_POINT, CKA_ALWAYS_AUTHENTICATE, 
-                                           CKA_WRAP_WITH_TRUSTED, CKA_OTP_FORMAT, CKA_OTP_LENGTH,
-                                           CKA_OTP_TIME_INTERVAL, CKA_OTP_USER_FRIENDLY_MODE,
-                                           CKA_OTP_CHALLENGE_REQUIREMENT, CKA_OTP_TIME_REQUIREMENT,
-                                           CKA_OTP_COUNTER_REQUIREMENT, CKA_OTP_PIN_REQUIREMENT,
-                                           CKA_OTP_COUNTER, CKA_OTP_TIME, CKA_OTP_USER_IDENTIFIER,
-                                           CKA_OTP_SERVICE_IDENTIFIER, CKA_OTP_SERVICE_LOGO, 
-                                           CKA_OTP_SERVICE_LOGO_TYPE, CKA_GOSTR3410_PARAMS, CKA_GOSTR3411_PARAMS,
-                                           CKA_GOST28147_PARAMS };
+                                           CKA_WRAP_WITH_TRUSTED };
+
+    const uint32_t optional_attributes[] = { CKA_ISSUER, CKA_SERIAL_NUMBER, CKA_AC_ISSUER, CKA_URL,
+                                             CKA_HASH_OF_SUBJECT_PUBLIC_KEY, CKA_HASH_OF_ISSUER_PUBLIC_KEY,
+                                             CKA_START_DATE, CKA_END_DATE, CKA_OTP_FORMAT, CKA_OTP_LENGTH,
+                                             CKA_OTP_TIME_INTERVAL, CKA_OTP_USER_FRIENDLY_MODE,
+                                             CKA_OTP_CHALLENGE_REQUIREMENT, CKA_OTP_TIME_REQUIREMENT,
+                                             CKA_OTP_COUNTER_REQUIREMENT, CKA_OTP_PIN_REQUIREMENT,
+                                             CKA_OTP_COUNTER, CKA_OTP_TIME, CKA_OTP_USER_IDENTIFIER,
+                                             CKA_OTP_SERVICE_IDENTIFIER, CKA_OTP_SERVICE_LOGO,
+                                             CKA_OTP_SERVICE_LOGO_TYPE, CKA_GOSTR3410_PARAMS, 
+                                             CKA_GOSTR3411_PARAMS, CKA_GOST28147_PARAMS };
 
     
     const int num_cached_attributes = sizeof(cached_attributes) /  sizeof(unsigned int);
+    const int num_optional_attributes = sizeof(optional_attributes) /  sizeof(unsigned int);
 
     // the buffer size is much larger than needed for most cases, but larger than 2048
     // can cause a RPC packet overflow error
@@ -869,6 +873,8 @@ hal_error_t add_cached_attributes_to_json(const hal_pkey_handle_t pkey, FILE *fp
     unsigned char attributes_buffer[attributes_buffer_len];
 
     int first = 1;
+
+    char buffer[4096]; // lazy waste of memory
 
     for (int i = 0; i < num_cached_attributes; ++i)
     {
@@ -881,8 +887,6 @@ hal_error_t add_cached_attributes_to_json(const hal_pkey_handle_t pkey, FILE *fp
                                         attributes_buffer,
                                         attributes_buffer_len)) == HAL_OK)
         {
-            char buffer[4096]; // lazy waste of memory
-
             if (!first) { fputc(',', fp);}
             else first = 0; 
 
@@ -892,6 +896,30 @@ hal_error_t add_cached_attributes_to_json(const hal_pkey_handle_t pkey, FILE *fp
             fputs(buffer, fp);
         }       
     }
+
+    for (int i = 0; i < num_optional_attributes; ++i)
+    {
+        hal_pkey_attribute_t attr_get = { .type = optional_attributes[i] };
+
+        hal_error_t err;
+        if ((err = hal_rpc_pkey_get_attributes(pkey,
+                                        &attr_get,
+                                        1,
+                                        attributes_buffer,
+                                        attributes_buffer_len)) == HAL_OK)
+        {
+            if (attr_get.length > 0)
+            {
+                if (!first) { fputc(',', fp);}
+                else first = 0; 
+
+                char *attr_data = binary_to_split_b64(attr_get.value, attr_get.length);
+                snprintf(buffer, 4095, "\"%u\":[%s]", attr_get.type, attr_data);
+
+                fputs(buffer, fp);
+            }
+        }       
+    }    
     return HAL_OK;
 }
 
