@@ -41,13 +41,15 @@ LIBTFM_BLD	?= ${LIBS_DIR}/libtfm
 
 LIBB64_SRC := libs/base64.c
 
+LIBMDNS_SRC := libs/mdns
+
 PKCS11_SRC := ${DKS_ROOT}/sw/pkcs11
 
 LIBS	:= ${LIBHAL_BLD}/libhal.a ${LIBDKS_BUILD}/libdks.a ${LIBTFM_BLD}/libtfm.a
 
 FLAGS := -g
 
-all : bin/dks_setup_console bin/dks_cryptech_backup
+all : bin/dks_setup_console bin/dks_cryptech_backup bin/findHSM
 
 bin/dks_setup_console : dks_setup_console.o ${LIBS}
 	mkdir -p bin
@@ -56,6 +58,10 @@ bin/dks_setup_console : dks_setup_console.o ${LIBS}
 bin/dks_cryptech_backup : dks_cryptech_backup.o cryptech_device.o serial.o cryptech_device_cty.o base64.o ${LIBS}
 	mkdir -p bin
 	gcc dks_cryptech_backup.o cryptech_device.o serial.o cryptech_device_cty.o base64.o ${LIBS} -lpthread  -o bin/dks_cryptech_backup
+
+bin/findHSM : ${LIBMDNS_SRC}/mdns.h findHSM.c
+	mkdir -p bin
+	gcc $(FLAGS) -I${LIBMDNS_SRC} findHSM.c -o bin/findHSM
 
 dks_setup_console.o : dks_setup_console.c
 	gcc $(FLAGS) -I${LIBERSSL_INCLUDE} -I${LIBDKS_SRC} -O -c dks_setup_console.c

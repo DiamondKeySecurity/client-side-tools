@@ -4,3 +4,4 @@ test-*
 dks_keygen
 dks_setup_console
 dks_cryptech_backup
+bin/findHSM
