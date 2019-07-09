@@ -117,8 +117,26 @@ error_condition:
 
 void SendHSMUpdate(ThreadArguments *args, char *command)
 {
-    // skip command code and ':RECV:'
+    // new HSM versions use curly braces
+    bool has_curly_braces = 0;
+
+    // skip command code and ':RECV:{'
     char *file_to_send = &command[10];
+
+    if (*file_to_send == '{')
+    {
+        has_curly_braces = 1;
+        ++file_to_send;
+    }
+
+    char *ptr = file_to_send;
+
+    // find the end of the master key option
+    if (has_curly_braces)
+    {
+        while (*ptr != '}') ptr++;
+        *ptr = 0;
+    }
 
     // send the file
     dks_send_file(args->tls, file_to_send);
