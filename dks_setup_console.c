@@ -464,6 +464,10 @@ int main(int argc, char **argv)
 
     hsm_info_t *hsm_info = NULL;
 
+    printf("\r\ndks_setup_console\r\n");
+    printf("Copyright 2018, 2019 Diamond Key Security, NFP\r\n");
+    printf("\r\nversion 19.07\r\n\r\n");
+
     if (pthread_mutex_init(&active_lock, NULL) != 0) 
     { 
         printf("Unable to create mutex lock.\n"); 

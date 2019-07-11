@@ -111,6 +111,11 @@ uint32_t get_random_handle()
     return handle;
 }
 
+int cmp_uuid(char *uuid1, char *uuid2)
+{
+    return memcmp(uuid1, uuid2, sizeof(hal_uuid_t)) == 0;
+}
+
 int cryptech_export_keys(uint32_t handle, char *setup_json, FILE **export_json)
 {
     if (export_json == NULL || setup_json == NULL) return HAL_ERROR_BAD_ARGUMENTS;
@@ -184,6 +189,9 @@ int cryptech_export_keys(uint32_t handle, char *setup_json, FILE **export_json)
 
     fputs(",\"keys\": [ ", fp);
 
+    int isfirstuuid = 1;
+    hal_uuid_t first_uuid;
+
     // loop through all keys on the device
     do
     {
@@ -204,6 +212,15 @@ int cryptech_export_keys(uint32_t handle, char *setup_json, FILE **export_json)
 
         for (int i = 0; i < n; ++i)
         {
+            if (isfirstuuid) {
+                memcpy(&first_uuid, &uuids[i], sizeof(hal_uuid_t));
+                isfirstuuid = 0;
+            }
+            else if (cmp_uuid((char *)&first_uuid, (char *)&uuids[i]) == 1)
+            {
+                n = 0;
+                break;
+            }
             // start the object
             if (first) { fputs("{ ", fp); first = 0; }
             else { fputs(", { ", fp); }
@@ -289,7 +306,8 @@ int cryptech_export_keys(uint32_t handle, char *setup_json, FILE **export_json)
         }
 
         // save the last uuid for more searches
-        memcpy(&previous_uuid, &uuids[n-1], sizeof(hal_uuid_t));
+        if (n > 0)
+            memcpy(&previous_uuid, &uuids[n-1], sizeof(hal_uuid_t));
     } while (n == MAX_UUIDS);
     
     // finish the json
